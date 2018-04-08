@@ -23,4 +23,6 @@ libraryDependencies ++= {
   )
 }
 
+cancelable in Global := true
+
 mainClass in (Compile, run) := Some("im.yojik.Main")
