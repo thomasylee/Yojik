@@ -1,7 +1,7 @@
-package im.yojik
+package im.yojik.xmpp
 
 import akka.actor.{ Actor, ActorLogging, ActorRef, ActorSystem, Props }
-import im.yojik.server.Server
+import im.yojik.xmpp.server.Server
 
 object Main {
   def main(args: Array[String]) {

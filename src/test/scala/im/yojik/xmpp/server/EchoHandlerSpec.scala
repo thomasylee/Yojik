@@ -5,7 +5,7 @@ import akka.util.ByteString
 import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
 import scala.concurrent.duration.FiniteDuration
 
-import im.yojik.server.EchoHandler
+import im.yojik.xmpp.server.EchoHandler
 
 class MySpec() extends TestKit(ActorSystem("MySpec")) with ImplicitSender
   with WordSpecLike with Matchers with BeforeAndAfterAll {

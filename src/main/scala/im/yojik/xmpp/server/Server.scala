@@ -1,4 +1,4 @@
-package im.yojik.server
+package im.yojik.xmpp.server
 
 import akka.actor.{ Actor, ActorRef, Props }
 import akka.io.{ IO, Tcp }
