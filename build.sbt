@@ -20,10 +20,11 @@ libraryDependencies ++= {
   Seq(
     "com.typesafe.akka" %% "akka-actor" % akkaV,
     "com.typesafe.akka" %% "akka-testkit" % akkaV,
+    "org.scalamock" %% "scalamock" % "4.1.0" % "test",
     "org.scalatest" %% "scalatest" % "3.0.5" % "test"
   )
 }
 
 cancelable in Global := true
 
-mainClass in (Compile, run) := Some("im.yojik.Main")
+mainClass in (Compile, run) := Some("xyz.thomaslee.yojik.xmpp.Main")
