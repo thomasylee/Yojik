@@ -7,6 +7,9 @@ import java.net.InetSocketAddress
 import xyz.thomaslee.yojik.xmpp.handlers.{ Handler, XmlStreamHandler }
 
 object TcpConnectionManager {
+  case class SetJabberId(jabberId: String)
+  case object XmlStreamOpened
+
   def props(remote: InetSocketAddress) =
     Props(classOf[TcpConnectionManager], remote)
 }
@@ -34,10 +37,12 @@ class TcpConnectionManager(remote: InetSocketAddress) extends Actor {
 
   def receive = {
     case Received(data) =>
-      if (xmlStreamOpen) println("XML stream open!")
-        // Context.ActorOf("/user/yojik/jid/" + jabberId) ! RouteToJid(data, sender())
-      else
+      if (!xmlStreamOpen)
         xmlStreamHandler ! Handler.Handle(data.utf8String)
+      else
+        println("Create handler for authenticated stanzas!")
+    case TcpConnectionManager.SetJabberId(jid) => jabberId = Some(jid)
+    case TcpConnectionManager.XmlStreamOpened => xmlStreamOpen = true
     case PeerClosed => context.stop(self)
   }
 }
