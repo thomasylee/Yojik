@@ -1,4 +1,4 @@
-package xyz.thomaslee.yojik.xmpp.tcp
+package xyz.thomaslee.yojik.tcp
 
 import akka.actor.{ Actor, ActorRef, Props }
 import akka.io.{ IO, Tcp }

@@ -1,4 +1,4 @@
-package xyz.thomaslee.yojik.xmpp.handlers
+package xyz.thomaslee.yojik.handlers
 
 import akka.actor.{ Actor, ActorRef, Props }
 import akka.io.Tcp.Write

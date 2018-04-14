@@ -7,7 +7,7 @@ import org.scalamock.scalatest.MockFactory
 import org.scalatest.{ BeforeAndAfterAll, FlatSpec, Matchers, WordSpecLike }
 import scala.concurrent.duration.FiniteDuration
 
-import xyz.thomaslee.yojik.xmpp.tcp.TcpConnectionManager
+import xyz.thomaslee.yojik.tcp.TcpConnectionManager
 
 class TcpConnectionManagerSpec extends TestKit(ActorSystem("TcpConnectionManagerSpec"))
   with MockFactory

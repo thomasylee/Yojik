@@ -1,8 +1,8 @@
-package xyz.thomaslee.yojik.xmpp
+package xyz.thomaslee.yojik
 
 import akka.actor.{ Actor, ActorLogging, ActorRef, ActorSystem, Props }
 
-import xyz.thomaslee.yojik.xmpp.tcp.TcpServer
+import xyz.thomaslee.yojik.tcp.TcpServer
 
 object Main {
   def main(args: Array[String]) {

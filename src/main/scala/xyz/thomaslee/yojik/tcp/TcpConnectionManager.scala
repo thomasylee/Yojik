@@ -1,10 +1,10 @@
-package xyz.thomaslee.yojik.xmpp.tcp
+package xyz.thomaslee.yojik.tcp
 
 import akka.actor.{ Actor, ActorRef, Props }
 import akka.io.Tcp.{ PeerClosed, Received, Write }
 import java.net.InetSocketAddress
 
-import xyz.thomaslee.yojik.xmpp.handlers.{ Handler, XmlStreamHandler }
+import xyz.thomaslee.yojik.handlers.{ Handler, XmlStreamHandler }
 
 object TcpConnectionManager {
   case class SetJabberId(jabberId: String)

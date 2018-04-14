@@ -27,4 +27,4 @@ libraryDependencies ++= {
 
 cancelable in Global := true
 
-mainClass in (Compile, run) := Some("xyz.thomaslee.yojik.xmpp.Main")
+mainClass in (Compile, run) := Some("xyz.thomaslee.yojik.Main")
