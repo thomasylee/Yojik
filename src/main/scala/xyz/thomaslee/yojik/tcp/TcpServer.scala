@@ -15,7 +15,7 @@ class TcpServer extends Actor {
     case bound @ Bound(localAddress) => context.parent ! bound
     case CommandFailed(_: Bind) => context.stop(self)
     case Connected(remote, _) =>
-      val handler = context.actorOf(TcpConnectionManager.props(remote))
+      val handler = context.actorOf(Props(classOf[TcpConnectionManager]))
       sender() ! Register(handler)
   }
 }

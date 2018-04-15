@@ -22,7 +22,7 @@ class TcpConnectionManagerSpec extends TestKit(ActorSystem("TcpConnectionManager
 
   "EchoHandler actor" must {
     "stops when PeerClosed is received" in {
-      val connManager = system.actorOf(TcpConnectionManager.props(mock[InetSocketAddress]))
+      val connManager = system.actorOf(Props(classOf[TcpConnectionManager]))
       connManager ! PeerClosed
       expectNoMessage(FiniteDuration(10, "ms"))
     }

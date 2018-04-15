@@ -2,47 +2,30 @@ package xyz.thomaslee.yojik.tcp
 
 import akka.actor.{ Actor, ActorRef, Props }
 import akka.io.Tcp.{ PeerClosed, Received, Write }
-import java.net.InetSocketAddress
+import akka.util.ByteString
 
-import xyz.thomaslee.yojik.handlers.{ Handler, XmlStreamHandler }
-
-object TcpConnectionManager {
-  case class SetJabberId(jabberId: String)
-  case object XmlStreamOpened
-
-  def props(remote: InetSocketAddress) =
-    Props(classOf[TcpConnectionManager], remote)
-}
+import xyz.thomaslee.yojik.ConnectionManager
+import xyz.thomaslee.yojik.messages.MessageActor
 
 /**
- * TcpConnectionManager handles a single incoming TCP connection provided by
- * TcpServer. It creates a SessionHandler to establish an XML stream session,
- * and then forwards XML stanzas to the actor bound to the specific JID.
+ * TcpConnectionManager handles a single TCP connection provided by TcpServer.
+ * It creates a ConnectionActor to handle messages received over the TCP
+ * connection.
  */
-class TcpConnectionManager(remote: InetSocketAddress) extends Actor {
-  /**
-   * The XmlStreamHandler that establishes an XML stream
-   */
-  lazy val xmlStreamHandler = context.actorOf(XmlStreamHandler.props(sender()))
+class TcpConnectionManager extends Actor {
+  lazy val messageActor = context.actorOf(Props(classOf[MessageActor]))
 
-  /**
-   * True if the XML stream has already been negotiated and started, false otherwise.
-   */
-  var xmlStreamOpen = false
-
-  /**
-   * The JID of the connected client.
-   */
-  var jabberId: Option[String] = None
+  var mostRecentSender: Option[ActorRef] = None
 
   def receive = {
-    case Received(data) =>
-      if (!xmlStreamOpen)
-        xmlStreamHandler ! Handler.Handle(data.utf8String)
-      else
-        println("Create handler for authenticated stanzas!")
-    case TcpConnectionManager.SetJabberId(jid) => jabberId = Some(jid)
-    case TcpConnectionManager.XmlStreamOpened => xmlStreamOpen = true
+    case Received(data) => {
+      mostRecentSender = Some(sender)
+      messageActor ! MessageActor.ProcessMessage(data.utf8String)
+    }
+    case ConnectionManager.ReplyToSender(message) => {
+      println("Sent: " + message)
+      if (mostRecentSender.isDefined) mostRecentSender.get ! Write(ByteString(message))
+    }
     case PeerClosed => context.stop(self)
   }
 }
