@@ -1,6 +1,7 @@
 package xyz.thomaslee.yojik.messages
 
-import akka.actor.{ Actor, ActorLogging, Props }
+import akka.actor.{ Actor, ActorLogging, PoisonPill, Props }
+import java.io.{ PipedInputStream, PipedOutputStream }
 import org.xml.sax.SAXParseException
 import scala.util.Random
 import scala.xml.XML
@@ -11,49 +12,59 @@ object MessageActor {
   case class ProcessMessage(message: String)
 
   val StreamNamespaceRegex = """<([^:]+:)?stream """.r
+
+  val ValidStreamNamespace = "http://etherx.jabber.org/streams"
 }
 
 class MessageActor extends Actor with ActorLogging {
   var streamNamespace = ""
 
-  lazy val streamId = "c2s-" + Random.alphanumeric.take(10).mkString
+  val xmlOutputStream = new PipedOutputStream
+
+  val xmlInputStream = new PipedInputStream(xmlOutputStream)
+
+  lazy val xmlParsingActor = context.actorOf(XmlParsingActor.props(xmlInputStream))
+
+  override def preStart = xmlParsingActor ! XmlParsingActor.StartParsing
 
   def receive = openXmlStream
 
-  def sendBadFormatResponse(request: String) =
-    sender ! ConnectionManager.ReplyToSender(
-      XmlResponse.XmlVersion + "\n" +
-      XmlResponse.OpenStream(request, streamId) + "\n" +
-      XmlResponse.BadFormat + "\n" +
-      XmlResponse.CloseStream)
-
-  def sendStreamOpenedResponse(request: String) =
-    sender ! ConnectionManager.ReplyToSender(
-      XmlResponse.XmlVersion + "\n" +
-      XmlResponse.OpenStream(request, streamId))
-
-  def extractStreamNamespace(xml: String) =
-    MessageActor.StreamNamespaceRegex.findFirstMatchIn(xml.trim) match {
-      case Some(regexMatch) =>
-        if (regexMatch.group(1) == null) ""
-        else regexMatch.group(1)
-      case None => ""
-    }
-
-  val openXmlStream: Receive = {
-    case MessageActor.ProcessMessage(message) => {
-      streamNamespace = extractStreamNamespace(message)
-
-      var xmlStream: Option[String] = None
-
-      try {
-        xmlStream = Some(XML.loadString(message + "</" + streamNamespace + "stream>").toString)
-      } catch {
-        case _: Throwable => sendBadFormatResponse(message)
+  def handleStreamError(error: XmlStreamError) = error match {
+    case XmlStreamError(_, errorType, message) => {
+      message match {
+        case Some(errorMessage) => log.warning(s"$errorType: $message")
+        case None => log.warning(errorType)
       }
-
-      if (xmlStream.isDefined)
-        sendStreamOpenedResponse(xmlStream.get)
+      context.parent ! ConnectionManager.ReplyToSender(
+        buildOpenStreamTag(XmlParsingActor.OpenStream(
+          error.prefix, MessageActor.ValidStreamNamespace, Map())) + "\n" +
+        error.toString)
+      context.parent ! ConnectionManager.Disconnect
     }
   }
+
+  val openXmlStream: Receive = {
+    case MessageActor.ProcessMessage(message) =>
+      xmlOutputStream.write(message.getBytes)
+    case error: XmlStreamError => handleStreamError(error)
+    case request: XmlParsingActor.OpenStream =>
+      validateOpenStreamRequest(request) match {
+        case Some(error: XmlStreamError) => handleStreamError(error)
+        case None => context.parent ! ConnectionManager.ReplyToSender(
+          buildOpenStreamTag(request))
+      }
+  }
+
+  def validateOpenStreamRequest(request: XmlParsingActor.OpenStream): Option[XmlStreamError] =
+    if (request.namespaceUri != MessageActor.ValidStreamNamespace)
+      Some(new InvalidNamespaceError(request.prefix, Some(request.namespaceUri)))
+    else
+      None
+
+  def buildOpenStreamTag(request: XmlParsingActor.OpenStream) =
+    XmlResponse.openStream(
+      prefix = request.prefix,
+      contentNamespace = Some("jabber:client"),
+      streamId = "abc",
+      recipient = request.attributes.get("from"))
 }

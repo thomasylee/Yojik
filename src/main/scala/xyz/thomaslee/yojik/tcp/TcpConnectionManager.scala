@@ -18,6 +18,7 @@ class TcpConnectionManager extends Actor {
   var mostRecentSender: Option[ActorRef] = None
 
   def receive = {
+    case ConnectionManager.Disconnect => context.stop(self)
     case Received(data) => {
       mostRecentSender = Some(sender)
       messageActor ! MessageActor.ProcessMessage(data.utf8String)
