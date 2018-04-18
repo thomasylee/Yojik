@@ -6,10 +6,11 @@ import org.xml.sax.SAXParseException
 import scala.util.Random
 import scala.xml.XML
 
-import xyz.thomaslee.yojik.ConnectionManager
+import xyz.thomaslee.yojik.ConnectionActor
 
 object MessageActor {
   case class ProcessMessage(message: String)
+  case object Stop
 
   val StreamNamespaceRegex = """<([^:]+:)?stream """.r
 
@@ -17,42 +18,60 @@ object MessageActor {
 }
 
 class MessageActor extends Actor with ActorLogging {
-  var streamNamespace = ""
-
   val xmlOutputStream = new PipedOutputStream
 
   val xmlInputStream = new PipedInputStream(xmlOutputStream)
 
-  lazy val xmlParsingActor = context.actorOf(XmlParsingActor.props(xmlInputStream))
+  lazy val xmlParsingActor = context.actorOf(
+    XmlParsingActor.props(xmlInputStream),
+    "xml-parsing-actor-" + Random.alphanumeric.take(10).mkString)
 
-  override def preStart = xmlParsingActor ! XmlParsingActor.StartParsing
+  def stop = {
+    context.stop(self)
+    try { xmlOutputStream.close } catch { case _: Throwable => {} }
+    try { xmlInputStream.close } catch { case _: Throwable => {} }
+    context.parent ! ConnectionActor.Disconnect
+  }
+  override def postStop = println("MessageActor stopped")
 
   def receive = openXmlStream
 
-  def handleStreamError(error: XmlStreamError) = error match {
-    case XmlStreamError(_, errorType, message) => {
-      message match {
-        case Some(errorMessage) => log.warning(s"$errorType: $message")
-        case None => log.warning(errorType)
-      }
-      context.parent ! ConnectionManager.ReplyToSender(
-        buildOpenStreamTag(XmlParsingActor.OpenStream(
-          error.prefix, MessageActor.ValidStreamNamespace, Map())) + "\n" +
-        error.toString)
-      context.parent ! ConnectionManager.Disconnect
-    }
-  }
-
   val openXmlStream: Receive = {
-    case MessageActor.ProcessMessage(message) =>
+    case MessageActor.ProcessMessage(message) => {
+      xmlParsingActor ! XmlParsingActor.Parse
       xmlOutputStream.write(message.getBytes)
-    case error: XmlStreamError => handleStreamError(error)
+    }
+    case error: XmlStreamError => handleStreamError(error, true)
     case request: XmlParsingActor.OpenStream =>
       validateOpenStreamRequest(request) match {
-        case Some(error: XmlStreamError) => handleStreamError(error)
-        case None => context.parent ! ConnectionManager.ReplyToSender(
+        case Some(error: XmlStreamError) => handleStreamError(error, true)
+        case None => context.parent ! ConnectionActor.ReplyToSender(
           buildOpenStreamTag(request))
       }
+    case XmlParsingActor.CloseStream(streamPrefix) => {
+      context.parent ! ConnectionActor.ReplyToSender(
+        XmlResponse.closeStream(streamPrefix))
+
+      stop
+    }
+    case MessageActor.Stop => stop
+  }
+
+  def handleStreamError(error: XmlStreamError, includeOpenStream: Boolean = false) = {
+    error.message match {
+      case Some(errorMessage) => log.warning(s"${ error.errorType }: $errorMessage")
+      case None => log.warning(error.errorType)
+    }
+
+    val openStreamIfNeeded =
+      if (includeOpenStream)
+        buildOpenStreamTag(XmlParsingActor.OpenStream(
+          error.prefix, MessageActor.ValidStreamNamespace, Map())) + "\n"
+      else ""
+
+    context.parent ! ConnectionActor.ReplyToSender(openStreamIfNeeded + error.toString)
+
+    stop
   }
 
   def validateOpenStreamRequest(request: XmlParsingActor.OpenStream): Option[XmlStreamError] =

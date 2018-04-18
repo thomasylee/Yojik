@@ -7,9 +7,13 @@ import org.scalamock.scalatest.MockFactory
 import org.scalatest.{ BeforeAndAfterAll, FlatSpec, Matchers, WordSpecLike }
 import scala.concurrent.duration.FiniteDuration
 
-import xyz.thomaslee.yojik.tcp.TcpConnectionManager
+import xyz.thomaslee.yojik.tcp.TcpConnectionActor
 
-class TcpConnectionManagerSpec extends TestKit(ActorSystem("TcpConnectionManagerSpec"))
+class MockActor extends Actor {
+  def receive: Receive = { case _ => {} }
+}
+
+class TcpConnectionActorSpec extends TestKit(ActorSystem("TcpConnectionActorSpec"))
   with MockFactory
   with ImplicitSender
   with WordSpecLike
@@ -22,8 +26,9 @@ class TcpConnectionManagerSpec extends TestKit(ActorSystem("TcpConnectionManager
 
   "EchoHandler actor" must {
     "stops when PeerClosed is received" in {
-      val connManager = system.actorOf(Props(classOf[TcpConnectionManager]))
-      connManager ! PeerClosed
+      val connection = system.actorOf(Props(classOf[MockActor]))
+      val connActor = system.actorOf(TcpConnectionActor.props(connection))
+      connActor ! PeerClosed
       expectNoMessage(FiniteDuration(10, "ms"))
     }
   }

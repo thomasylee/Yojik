@@ -1,6 +1,6 @@
 package xyz.thomaslee.yojik
 
-object ConnectionManager {
+object ConnectionActor {
   case object Disconnect
   case class ReplyToSender(message: String)
 }

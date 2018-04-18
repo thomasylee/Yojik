@@ -3,7 +3,7 @@ package xyz.thomaslee.yojik.messages
 /**
  * XmlStreamError is the parent class of all XMPP stream errors.
  */
-case class XmlStreamError(prefix: Option[String], errorType: String, message: Option[String]) {
+case class XmlStreamError(val prefix: Option[String], val errorType: String, val message: Option[String]) {
   override def toString = {
     val visiblePrefix = prefix match {
       case Some(pre) => pre + ":"

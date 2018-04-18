@@ -18,7 +18,7 @@ class DeadLetterActor extends Actor with ActorLogging {
       val toName = to.path.name
       if (!fromName.startsWith(DeadLetterActor.XmlParsingActorPrefix) &&
           !toName.startsWith(DeadLetterActor.XmlParsingActorPrefix) &&
-          msg != ConnectionManager.Disconnect &&
+          msg != ConnectionActor.Disconnect &&
           msg != MessageActor.Stop)
         println("Message failed to send from " + fromName + " to " +
           toName + ": " + msg.toString)
