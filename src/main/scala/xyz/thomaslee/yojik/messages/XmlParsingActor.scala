@@ -9,6 +9,7 @@ object XmlParsingActor {
 
   case class CloseStream(streamPrefix: Option[String])
   case class OpenStream(val prefix: Option[String], val namespaceUri: String, val attributes: Map[String, String])
+  case class StartTls(namespaceUri: String)
 
   def props(inputStream: InputStream) =
     Props(classOf[XmlParsingActor], inputStream)
@@ -33,7 +34,7 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
         Some(xmlReader.next) collect {
           case XMLStreamConstants.START_ELEMENT => {
             depth += 1
-            if (xmlReader.getName.getLocalPart == "stream") {
+            if (depth == 1 && xmlReader.getName.getLocalPart == "stream") {
               // Prefixes can be null, "", or a non-empty String.
               streamPrefix =
                 if (xmlReader.getPrefix == null || xmlReader.getPrefix == "") None
@@ -47,6 +48,9 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
                   (xmlReader.getAttributeName(i).getLocalPart, xmlReader.getAttributeValue(i))
                 ).toMap
               )
+            }
+            else if (depth == 2 && xmlReader.getName.getLocalPart == "starttls") {
+              context.parent ! XmlParsingActor.StartTls(xmlReader.getNamespaceURI)
             }
             else {
               context.parent ! new ServiceUnavailableError(None, Some(

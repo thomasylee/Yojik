@@ -15,6 +15,7 @@ object MessageActor {
   val StreamNamespaceRegex = """<([^:]+:)?stream """.r
 
   val ValidStreamNamespace = "http://etherx.jabber.org/streams"
+  val ValidStartTlsNamespace = "urn:ietf:params:xml:ns:xmpp-tls"
 }
 
 class MessageActor extends Actor with ActorLogging {
@@ -45,8 +46,12 @@ class MessageActor extends Actor with ActorLogging {
     case request: XmlParsingActor.OpenStream =>
       validateOpenStreamRequest(request) match {
         case Some(error: XmlStreamError) => handleStreamError(error, true)
-        case None => context.parent ! ConnectionActor.ReplyToSender(
-          buildOpenStreamTag(request))
+        case None => {
+          context.parent ! ConnectionActor.ReplyToSender(
+            buildOpenStreamTag(request) + "\n" +
+            XmlResponse.startTlsStreamFeature(request.prefix))
+          context.become(startTls(request.prefix))
+        }
       }
     case XmlParsingActor.CloseStream(streamPrefix) => {
       context.parent ! ConnectionActor.ReplyToSender(
@@ -54,6 +59,37 @@ class MessageActor extends Actor with ActorLogging {
 
       stop
     }
+    case MessageActor.Stop => stop
+  }
+
+  def startTls(prefix: Option[String]): Receive = {
+    case MessageActor.ProcessMessage(message) => {
+      xmlParsingActor ! XmlParsingActor.Parse
+      xmlOutputStream.write(message.getBytes)
+    }
+    case error: XmlStreamError => handleStreamError(error, true)
+    case tls: XmlParsingActor.StartTls => handleStartTls(tls) match {
+      case Some(error: StartTlsError) => {
+        log.warning(s"StartTls failure: ${error.message}")
+        context.parent ! ConnectionActor.ReplyToSender(
+          error.toString + "\n" + XmlResponse.closeStream(prefix))
+        stop
+      }
+      case None => {
+        context.parent ! ConnectionActor.ReplyToSender(XmlResponse.proceedWithTls)
+        context.become(negotiateTls(prefix))
+      }
+    }
+    case XmlParsingActor.CloseStream(streamPrefix) => {
+      context.parent ! ConnectionActor.ReplyToSender(
+        XmlResponse.closeStream(streamPrefix))
+
+      stop
+    }
+    case MessageActor.Stop => stop
+  }
+
+  def negotiateTls(prefix: Option[String]): Receive = {
     case MessageActor.Stop => stop
   }
 
@@ -86,4 +122,10 @@ class MessageActor extends Actor with ActorLogging {
       contentNamespace = Some("jabber:client"),
       streamId = "abc",
       recipient = request.attributes.get("from"))
+
+  def handleStartTls(request: XmlParsingActor.StartTls): Option[StartTlsError] =
+    if (request.namespaceUri != MessageActor.ValidStartTlsNamespace)
+      Some(new StartTlsError(request.namespaceUri))
+    else
+      None
 }
