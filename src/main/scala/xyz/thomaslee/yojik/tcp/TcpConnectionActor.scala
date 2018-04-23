@@ -34,13 +34,13 @@ class TcpConnectionActor(connection: ActorRef) extends Actor with ActorLogging {
       messageActor ! MessageActor.Stop
       context.stop(self)
     }
-    case Received(data) => {
+    case Received(data: ByteString) => {
       mostRecentSender = Some(sender)
-      messageActor ! MessageActor.ProcessMessage(data.utf8String)
+      messageActor ! MessageActor.ProcessMessage(data)
     }
     case ConnectionActor.ReplyToSender(message) => {
-      println("Sent: " + message)
-      if (mostRecentSender.isDefined) mostRecentSender.get ! Write(ByteString(message))
+      println("Sent: " + message.utf8String)
+      if (mostRecentSender.isDefined) mostRecentSender.get ! Write(message)
     }
     case PeerClosed => {
       println("Peer closed!")

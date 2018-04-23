@@ -49,10 +49,7 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
                 ).toMap
               )
             }
-            else if (depth == 2 && xmlReader.getName.getLocalPart == "starttls") {
-              context.parent ! XmlParsingActor.StartTls(xmlReader.getNamespaceURI)
-            }
-            else {
+            else if (depth == 0) {
               context.parent ! new ServiceUnavailableError(None, Some(
                 s"<${ xmlReader.getName.getLocalPart }/> must instead be <stream/>"))
             }
@@ -62,6 +59,10 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
             if (depth == 0) {
               println("Stream closed!")
               context.parent ! XmlParsingActor.CloseStream(streamPrefix)
+            }
+            else if (depth == 1 && xmlReader.getName.getLocalPart == "starttls") {
+              println("Start TLS!")
+              context.parent ! XmlParsingActor.StartTls(xmlReader.getNamespaceURI)
             }
           }
         }

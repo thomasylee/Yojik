@@ -1,6 +1,7 @@
 package xyz.thomaslee.yojik
 
 import akka.actor.{ Actor, ActorLogging, ActorRef, DeadLetter }
+import akka.util.ByteString
 
 import xyz.thomaslee.yojik.messages.MessageActor
 
@@ -13,7 +14,7 @@ object DeadLetterActor {
 
 class DeadLetterActor extends Actor with ActorLogging {
   def receive: Receive = {
-    case DeadLetter(msg, from, to) => {
+    case DeadLetter(msg: ByteString, from, to) => {
       val fromName = from.path.name
       val toName = to.path.name
       if (!fromName.startsWith(DeadLetterActor.XmlParsingActorPrefix) &&
@@ -21,7 +22,7 @@ class DeadLetterActor extends Actor with ActorLogging {
           msg != ConnectionActor.Disconnect &&
           msg != MessageActor.Stop)
         println("Message failed to send from " + fromName + " to " +
-          toName + ": " + msg.toString)
+          toName + ": " + msg.utf8String)
     }
   }
 }

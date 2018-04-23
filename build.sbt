@@ -15,9 +15,10 @@ scalacOptions ++= Seq(
 resolvers += "Typesafe Repository" at "https://repo.typesafe.com/typesafe/releases/"
 
 libraryDependencies ++= {
-  val akkaV = "2.5.11"
+  val akkaV = "2.5.12"
 
   Seq(
+    "com.github.marianobarrios" % "tls-channel" % "0.1.0",
     "com.typesafe.akka" %% "akka-actor" % akkaV,
     "com.typesafe.akka" %% "akka-testkit" % akkaV,
     "com.typesafe" % "config" % "1.3.3",
