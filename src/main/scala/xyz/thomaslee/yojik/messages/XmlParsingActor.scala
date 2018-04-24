@@ -16,7 +16,7 @@ object XmlParsingActor {
 }
 
 class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging {
-  lazy val xmlReader: XMLStreamReader  =
+  val xmlReader: XMLStreamReader =
     XMLInputFactory.newInstance.createXMLStreamReader(inputStream)
 
   var streamPrefix: Option[String] = None
@@ -69,9 +69,8 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
 
         if (xmlReader.hasNext) self ! XmlParsingActor.Parse
       } catch {
-        case error: XMLStreamException => {
+        case error: XMLStreamException if !error.toString.contains("Pipe closed") =>
           context.parent ! new BadFormatError(None, Some(error.toString))
-        }
       }
     }
   }

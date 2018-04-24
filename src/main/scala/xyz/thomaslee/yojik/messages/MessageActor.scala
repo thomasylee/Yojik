@@ -120,7 +120,7 @@ class MessageActor extends Actor with ActorLogging {
     }
     case MessageActor.ProcessDecryptedMessage(message) => {
       println("Decrypted: " + message.utf8String)
-      xmlOutputStream.write(message.toArray[Byte])
+      xmlOutputStream.write(message.takeWhile(_ != '\u0000').toArray[Byte])
       xmlParser ! XmlParsingActor.Parse
     }
     case MessageActor.PassToClient(message) =>
@@ -129,10 +129,10 @@ class MessageActor extends Actor with ActorLogging {
       tlsActor ! TlsActor.Stop
       stop
     }
-    case error: XmlStreamError => {} // handleStreamError(error, true)
+    case error: XmlStreamError => handleStreamErrorWithTls(error, tlsActor)
     case request: XmlParsingActor.OpenStream =>
       validateOpenStreamRequest(request) match {
-        case Some(error: XmlStreamError) => handleStreamError(error, true)
+        case Some(error: XmlStreamError) => handleStreamErrorWithTls(error, tlsActor)
         case None => {
           // TODO: Send SASL stream feature to the client.
           tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
@@ -140,11 +140,8 @@ class MessageActor extends Actor with ActorLogging {
         }
       }
     case XmlParsingActor.CloseStream(streamPrefix) => {
-      // TODO: Figure out why the </stream:stream> tag isn't getting detected.
       tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
         XmlResponse.closeStream(streamPrefix)))
-
-      // stop
     }
   }
 
@@ -162,6 +159,17 @@ class MessageActor extends Actor with ActorLogging {
 
     context.parent ! ConnectionActor.ReplyToSender(ByteString(
       openStreamIfNeeded + error.toString))
+
+    stop
+  }
+
+  def handleStreamErrorWithTls(error: XmlStreamError, tlsActor: ActorRef) = {
+    error.message match {
+      case Some(errorMessage) => log.warning(s"${ error.errorType }: $errorMessage")
+      case None => log.warning(error.errorType)
+    }
+
+    tlsActor ! TlsActor.SendEncryptedToClient(ByteString(error.toString))
 
     stop
   }
