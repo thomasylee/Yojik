@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/thomasylee/Yojik.svg?branch=master)](https://travis-ci.org/thomasylee/Yojik)
+[![Coverage Status](https://coveralls.io/repos/github/thomasylee/Yojik/badge.svg?branch=master)](https://coveralls.io/github/thomasylee/Yojik?branch=master)
 
 # Yojik
 Definitions:
