@@ -7,6 +7,7 @@ import javax.xml.stream.{ XMLInputFactory, XMLStreamConstants, XMLStreamExceptio
 object XmlParsingActor {
   case object Parse
 
+  case class AuthenticateWithSasl(mechanism: Option[String], namespaceUri: Option[String], value: Option[String])
   case class CloseStream(streamPrefix: Option[String])
   case class OpenStream(val prefix: Option[String], val namespaceUri: String, val attributes: Map[String, String])
   case class StartTls(namespaceUri: String)
@@ -22,6 +23,10 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
   var streamPrefix: Option[String] = None
 
   var depth = 0
+
+  var lastText: Option[String] = None
+
+  var authAttributes: Option[Map[String, Any]] = None
 
   override def postStop = {
     println("XmlParsingActor stopped")
@@ -49,6 +54,11 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
                 ).toMap
               )
             }
+            else if (depth == 2 && xmlReader.getName.getLocalPart == "auth") {
+              authAttributes = Some((0 until xmlReader.getAttributeCount).map(i =>
+                (xmlReader.getAttributeName(i).getLocalPart, xmlReader.getAttributeValue(i))
+              ).toMap)
+            }
             else if (depth == 0) {
               context.parent ! new ServiceUnavailableError(None, Some(
                 s"<${ xmlReader.getName.getLocalPart }/> must instead be <stream/>"))
@@ -64,7 +74,22 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
               println("Start TLS!")
               context.parent ! XmlParsingActor.StartTls(xmlReader.getNamespaceURI)
             }
+            else if (depth == 1 && xmlReader.getName.getLocalPart == "auth") {
+              val namespace = xmlReader.getNamespaceURI
+              val value = lastText
+              context.parent ! XmlParsingActor.AuthenticateWithSasl(
+                authAttributes match {
+                  case None => None
+                  case Some(attributes) =>
+                    if (attributes("mechanism") == null) None
+                    else Some(attributes("mechanism").toString)
+                },
+                if (namespace == null) None else Some(namespace),
+                lastText)
+            }
           }
+          case XMLStreamConstants.CHARACTERS => lastText = Some(xmlReader.getText())
+          case XMLStreamConstants.CDATA => lastText = Some(xmlReader.getText())
         }
 
         if (xmlReader.hasNext) self ! XmlParsingActor.Parse

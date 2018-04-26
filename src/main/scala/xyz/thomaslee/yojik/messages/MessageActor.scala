@@ -3,7 +3,9 @@ package xyz.thomaslee.yojik.messages
 import akka.actor.{ Actor, ActorLogging, ActorRef, PoisonPill, Props }
 import akka.util.ByteString
 import java.io.{ PipedInputStream, PipedOutputStream }
+import java.util.Base64
 import org.xml.sax.SAXParseException
+import scala.annotation.tailrec
 import scala.util.Random
 import scala.xml.XML
 
@@ -22,16 +24,7 @@ object MessageActor {
 
 class MessageActor extends Actor with ActorLogging {
   var xmlOutputStream = new PipedOutputStream
-
   var xmlInputStream = new PipedInputStream(xmlOutputStream)
-
-  lazy val xmlParsingActor = {
-    val xmlParserId = "xml-parsing-actor-" + Random.alphanumeric.take(10).mkString
-    println("First: " + xmlParserId)
-    context.actorOf(
-      XmlParsingActor.props(xmlInputStream),
-      "xml-parsing-actor-" + Random.alphanumeric.take(10).mkString)
-  }
 
   def stop = {
     context.stop(self)
@@ -41,11 +34,13 @@ class MessageActor extends Actor with ActorLogging {
   }
   override def postStop = println("MessageActor stopped")
 
-  def receive = openXmlStream
+  def receive = openXmlStream(context.actorOf(
+    XmlParsingActor.props(xmlInputStream),
+    "xml-parsing-actor-" + Random.alphanumeric.take(10).mkString))
 
-  val openXmlStream: Receive = {
+  def openXmlStream(xmlParser: ActorRef): Receive = {
     case MessageActor.ProcessMessage(message) => {
-      xmlParsingActor ! XmlParsingActor.Parse
+      xmlParser ! XmlParsingActor.Parse
       xmlOutputStream.write(message.toArray[Byte])
     }
     case error: XmlStreamError => handleStreamError(error, true)
@@ -56,7 +51,7 @@ class MessageActor extends Actor with ActorLogging {
           context.parent ! ConnectionActor.ReplyToSender(ByteString(
             buildOpenStreamTag(request) + "\n" +
             XmlResponse.startTlsStreamFeature(request.prefix)))
-          context.become(startTls(request.prefix))
+          context.become(startTls(request.prefix, xmlParser))
         }
       }
     case XmlParsingActor.CloseStream(streamPrefix) => {
@@ -68,10 +63,10 @@ class MessageActor extends Actor with ActorLogging {
     case MessageActor.Stop => stop
   }
 
-  def startTls(prefix: Option[String]): Receive = {
+  def startTls(prefix: Option[String], xmlParser: ActorRef): Receive = {
     case MessageActor.ProcessMessage(message) => {
       println("Received: " + message.utf8String)
-      xmlParsingActor ! XmlParsingActor.Parse
+      xmlParser ! XmlParsingActor.Parse
       xmlOutputStream.write(message.toArray[Byte])
     }
     case error: XmlStreamError => handleStreamError(error, true)
@@ -86,23 +81,12 @@ class MessageActor extends Actor with ActorLogging {
         context.parent ! ConnectionActor.ReplyToSender(ByteString(
           XmlResponse.proceedWithTls))
 
-        context.stop(xmlParsingActor)
-        try { xmlOutputStream.close } catch { case _: Throwable => {} }
-        try { xmlInputStream.close } catch { case _: Throwable => {} }
-
-        xmlOutputStream = new PipedOutputStream
-        xmlInputStream = new PipedInputStream(xmlOutputStream)
-
-        val xmlParserId = "xml-parsing-actor-" + Random.alphanumeric.take(10).mkString
-        println("Second: " + xmlParserId)
         context.become(negotiateTls(
           prefix,
           context.actorOf(
             Props(classOf[TlsActor]),
             "tls-actor-" + Random.alphanumeric.take(10).mkString),
-          context.actorOf(
-            XmlParsingActor.props(xmlInputStream),
-            xmlParserId)))
+          recreateXmlParser(xmlParser)))
       }
     }
     case XmlParsingActor.CloseStream(streamPrefix) => {
@@ -120,7 +104,7 @@ class MessageActor extends Actor with ActorLogging {
     }
     case MessageActor.ProcessDecryptedMessage(message) => {
       println("Decrypted: " + message.utf8String)
-      xmlOutputStream.write(message.takeWhile(_ != '\u0000').toArray[Byte])
+      xmlOutputStream.write(removePaddingFromDecryptedBytes(message).toArray[Byte])
       xmlParser ! XmlParsingActor.Parse
     }
     case MessageActor.PassToClient(message) =>
@@ -134,15 +118,132 @@ class MessageActor extends Actor with ActorLogging {
       validateOpenStreamRequest(request) match {
         case Some(error: XmlStreamError) => handleStreamErrorWithTls(error, tlsActor)
         case None => {
-          // TODO: Send SASL stream feature to the client.
           tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
-            buildOpenStreamTag(request)))
+            buildOpenStreamTag(request) + "\n" +
+            XmlResponse.saslStreamFeature(request.prefix)))
+
+          context.become(saslAuthenticate(request.prefix, tlsActor, xmlParser))
         }
       }
-    case XmlParsingActor.CloseStream(streamPrefix) => {
+    case XmlParsingActor.CloseStream => {
       tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
-        XmlResponse.closeStream(streamPrefix)))
+        XmlResponse.closeStream(prefix)))
     }
+  }
+
+  def saslAuthenticate(prefix: Option[String], tlsActor: ActorRef, xmlParser: ActorRef): Receive = {
+    case MessageActor.ProcessMessage(message) => {
+      tlsActor ! TlsActor.ProcessMessage(message)
+    }
+    case MessageActor.ProcessDecryptedMessage(message) => {
+      println("Decrypted: " + message.utf8String)
+      xmlOutputStream.write(removePaddingFromDecryptedBytes(message).toArray[Byte])
+      xmlParser ! XmlParsingActor.Parse
+    }
+    case MessageActor.PassToClient(message) =>
+      context.parent ! ConnectionActor.ReplyToSender(message)
+    case MessageActor.Stop => {
+      tlsActor ! TlsActor.Stop
+      stop
+    }
+    case error: XmlStreamError => handleStreamErrorWithTls(error, tlsActor)
+    case XmlParsingActor.CloseStream => {
+      tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
+        XmlResponse.closeStream(prefix)))
+    }
+    case XmlParsingActor.AuthenticateWithSasl(mechanism, namespace, base64Value) => {
+      if (namespace.isEmpty || namespace.get != "urn:ietf:params:xml:ns:xmpp-sasl") {
+        tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
+          new FailureWithDefinedCondition("malformed-request").toString))
+      }
+      else mechanism match {
+        case Some("PLAIN") =>
+          try {
+            base64Value match {
+              case None => {
+                tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
+                  new FailureWithDefinedCondition("incorrect-encoding").toString))
+              }
+              case Some(base64Str) => {
+                // Strip out the authcid, so only authzid and passwd remain.
+                val lastParts = Base64.getDecoder().decode(base64Str).dropWhile(_ != 0)
+
+                // Split the remainder into Nul-authzid and Nul-passwd.
+                val partsWithNul = lastParts.splitAt(lastParts.lastIndexOf(0))
+
+                // Remove the Nuls to get the username and password.
+                val username = new String(partsWithNul._1.drop(1))
+                val password = new String(partsWithNul._2.drop(1))
+
+                // Use fake credentials until there's a database of some kind.
+                if (username == "test_username" && password == "test_password") {
+                  tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
+                    XmlResponse.saslSuccess))
+
+                  context.become(bindResource(
+                    prefix,
+                    tlsActor,
+                    xmlParser,
+                    username))
+                }
+                else {
+                  tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
+                    new FailureWithDefinedCondition("not-authorized").toString))
+                }
+              }
+            }
+          }
+          catch {
+            // Base64 decoding failed, so reply with an incorrect-encoding error.
+            case _: IllegalArgumentException =>
+              tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
+                new FailureWithDefinedCondition("incorrect-encoding").toString))
+          }
+        case _ => {
+          tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
+            new FailureWithDefinedCondition("invalid-mechanism").toString))
+        }
+      }
+    }
+  }
+
+  // TODO: Do the resource binding.
+  def bindResource(prefix: Option[String], tlsActor: ActorRef, xmlParser: ActorRef, user: String): Receive = {
+    case MessageActor.ProcessMessage(message) => {
+      tlsActor ! TlsActor.ProcessMessage(message)
+    }
+    case MessageActor.ProcessDecryptedMessage(message) => {
+      println("Decrypted: " + message.utf8String)
+      xmlOutputStream.write(removePaddingFromDecryptedBytes(message).toArray[Byte])
+      xmlParser ! XmlParsingActor.Parse
+    }
+    case MessageActor.PassToClient(message) =>
+      context.parent ! ConnectionActor.ReplyToSender(message)
+    case MessageActor.Stop => {
+      tlsActor ! TlsActor.Stop
+      stop
+    }
+    case error: XmlStreamError => handleStreamErrorWithTls(error, tlsActor)
+    case XmlParsingActor.CloseStream => {
+      tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
+        XmlResponse.closeStream(prefix)))
+    }
+  }
+
+  /**
+   * Returns the ByteString with trailing \u0000 characters removed.
+   *
+   * @param bytes the ByteString to remove padding from
+   * @return a ByteString equal to the original, minus trailing \u0000 characters
+   */
+  def removePaddingFromDecryptedBytes(bytes: ByteString) = {
+    @tailrec
+    def findLastNulIndex(index: Int): Int =
+      if (index == 0) bytes.length
+      else if (bytes(index) != 0) index + 1
+      else findLastNulIndex(index - 1)
+
+    bytes.take(findLastNulIndex(bytes.length - 1))
   }
 
   def handleStreamError(error: XmlStreamError, includeOpenStream: Boolean = false) = {
@@ -192,4 +293,17 @@ class MessageActor extends Actor with ActorLogging {
       Some(new StartTlsError(request.namespaceUri))
     else
       None
+
+  def recreateXmlParser(xmlParser: ActorRef) = {
+    context.stop(xmlParser)
+    try { xmlOutputStream.close } catch { case _: Throwable => {} }
+    try { xmlInputStream.close } catch { case _: Throwable => {} }
+
+    xmlOutputStream = new PipedOutputStream
+    xmlInputStream = new PipedInputStream(xmlOutputStream)
+
+    context.actorOf(
+      XmlParsingActor.props(xmlInputStream),
+      "xml-parsing-actor-" + Random.alphanumeric.take(10).mkString)
+  }
 }

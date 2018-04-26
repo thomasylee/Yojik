@@ -10,6 +10,7 @@ Currently, Yojik only supports the following features:
 * Opening an XML stream as defined in [XMPP Core](https://xmpp.org/rfcs/rfc6120.html)
 * Securing the connection with STARTTLS as a required stream feature
 * Reopening the XML stream over the encrypted connection
+* SASL-PLAIN authentication
 
 # Building
 

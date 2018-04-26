@@ -37,3 +37,10 @@ class InvalidNamespaceError(prefix: Option[String], message: Option[String])
 class StartTlsError(val message: String) {
   override def toString = "<failure xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>"
 }
+
+class FailureWithDefinedCondition(condition: String) {
+  override def toString =
+    s"""<failure xmlns='urn:ietf:params:xml:ns:xmpp-sasl'>
+       |  <${ condition }/>
+       |</failure>""".stripMargin
+}

@@ -45,4 +45,21 @@ object XmlResponse {
        |</${ insertPrefix(prefix) }features>""".stripMargin
 
   val proceedWithTls = "<proceed xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>"
+
+  def saslStreamFeature(prefix: Option[String], includeExternal: Boolean = false) =
+    s"""<${ insertPrefix(prefix) }features>
+       |  <mechanisms xmlns='urn:ietf:params:xml:ns:xmpp-sasl'>
+       |    ${ if (includeExternal) "<mechanism>EXTERNAL</mechanism>" else "" }
+       |    <!-- Not yet implemented: <mechanism>SCRAM-SHA-1-PLUS</mechanism> -->
+       |    <!-- Not yet implemented: <mechanism>SCRAM-SHA-1</mechanism> -->
+       |    <mechanism>PLAIN</mechanism>
+       |  </mechanisms>
+       |</${ insertPrefix(prefix) }features>""".stripMargin
+
+  val saslSuccess = "<success xmlns='urn:ietf:params:xml:ns:xmpp-sasl'/>"
+
+  def resourceBindFeature(prefix: Option[String]) =
+    s"""<${ insertPrefix(prefix) }:features>
+       |  <bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'/>
+       |</${ insertPrefix(prefix) }:features>""".stripMargin
 }
