@@ -12,6 +12,7 @@ import scala.xml.XML
 import xyz.thomaslee.yojik.ConnectionActor
 import xyz.thomaslee.yojik.tls.TlsActor
 
+// TODO: Break this into separate files by behavior.
 object MessageActor {
   case class PassToClient(message: ByteString)
   case class ProcessMessage(message: ByteString)
