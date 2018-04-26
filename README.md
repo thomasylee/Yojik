@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/thomasylee/Yojik.svg?branch=master)](https://travis-ci.org/thomasylee/Yojik)
+
 # Yojik
 Definitions:
 * A friendly nocturnal mammal with small spines on its back (see [ёжик](https://ru.wikipedia.org/wiki/%D0%9E%D0%B1%D1%8B%D0%BA%D0%BD%D0%BE%D0%B2%D0%B5%D0%BD%D0%BD%D1%8B%D0%B9_%D1%91%D0%B6)).
