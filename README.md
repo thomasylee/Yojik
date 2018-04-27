@@ -1,7 +1,7 @@
 [![Build Status](https://travis-ci.org/thomasylee/Yojik.svg?branch=master)](https://travis-ci.org/thomasylee/Yojik)
 [![Coverage Status](https://coveralls.io/repos/github/thomasylee/Yojik/badge.svg?branch=master)](https://coveralls.io/github/thomasylee/Yojik?branch=master)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/b74a3556b4394a24b5eb49309a3ede48)](https://www.codacy.com/app/thomasylee/Yojik?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=thomasylee/Yojik&amp;utm_campaign=Badge_Grade)
-[![VersionEye Badge](https://www.versioneye.com/user/projects/5ae2aa660fb24f546966fceb)](https://www.versioneye.com/user/projects/5ae2aa660fb24f546966fceb/badge.svg)
+[![VersionEye Badge](https://www.versioneye.com/user/projects/5ae2aa660fb24f546966fceb/badge.svg)](https://www.versioneye.com/user/projects/5ae2aa660fb24f546966fceb)
 
 # Yojik
 Definitions:
