@@ -8,5 +8,4 @@ script:
   - sbt clean coverage test
   - sbt coverageReport
   - sbt coverageAggregate
-  - sbt codacyCoverage
-after_success: sbt coveralls
+after_success: sbt codacyCoverage
