@@ -30,7 +30,9 @@ class RawTlsChannel(tlsActor: ActorRef) extends ByteChannel {
    * @return the number of bytes read, which could be 0
    */
   override def read(buffer: ByteBuffer): Int =
-    if (incomingBytes.isEmpty) 0
+    if (incomingBytes.isEmpty) {
+      0
+    }
     else if (incomingBytes.head.remaining > buffer.remaining) {
       val toWrite = new Array[Byte](buffer.remaining)
       incomingBytes.head.get(toWrite)

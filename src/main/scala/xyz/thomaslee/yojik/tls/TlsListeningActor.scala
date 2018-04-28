@@ -13,11 +13,13 @@ object TlsListeningActor {
 }
 
 class TlsListeningActor(tlsChannel: ServerTlsChannel) extends Actor with ActorLogging {
-  override def postStop: Unit = println("TlsListeningActor stopped")
+  val bufferSize = 1000
+
+  override def postStop: Unit = log.debug("TlsListeningActor stopped")
 
   def receive: Receive = {
     case TlsListeningActor.Listen => {
-      val response = ByteBuffer.allocate(1000);
+      val response = ByteBuffer.allocate(bufferSize);
       try {
         if (tlsChannel.read(response) != -1) {
           context.parent ! TlsActor.SendToServer(ByteString(response.array()))

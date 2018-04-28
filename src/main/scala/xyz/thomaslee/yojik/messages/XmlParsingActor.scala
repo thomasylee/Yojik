@@ -29,7 +29,7 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
   var authAttributes: Option[Map[String, Any]] = None
 
   override def postStop: Unit = {
-    println("XmlParsingActor stopped")
+    log.debug("XmlParsingActor stopped")
     xmlReader.close
   }
 
@@ -42,8 +42,12 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
             if (depth == 1 && xmlReader.getName.getLocalPart == "stream") {
               // Prefixes can be null, "", or a non-empty String.
               streamPrefix =
-                if (xmlReader.getPrefix == null || xmlReader.getPrefix == "") None
-                else Some(xmlReader.getPrefix)
+                if (xmlReader.getPrefix == null || xmlReader.getPrefix == "") {
+                  None
+                }
+                else {
+                  Some(xmlReader.getPrefix)
+                }
 
               // Need attributes to determine "to" field.
               context.parent ! XmlParsingActor.OpenStream(
@@ -67,11 +71,11 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
           case XMLStreamConstants.END_ELEMENT => {
             depth -= 1
             if (depth == 0) {
-              println("Stream closed!")
+              log.debug("XML stream closed")
               context.parent ! XmlParsingActor.CloseStream(streamPrefix)
             }
             else if (depth == 1 && xmlReader.getName.getLocalPart == "starttls") {
-              println("Start TLS!")
+              log.debug("<starttls/> received")
               context.parent ! XmlParsingActor.StartTls(xmlReader.getNamespaceURI)
             }
             else if (depth == 1 && xmlReader.getName.getLocalPart == "auth") {

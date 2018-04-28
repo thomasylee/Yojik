@@ -20,9 +20,10 @@ class DeadLetterActor extends Actor with ActorLogging {
       if (!fromName.startsWith(DeadLetterActor.XmlParsingActorPrefix) &&
           !toName.startsWith(DeadLetterActor.XmlParsingActorPrefix) &&
           msg != ConnectionActor.Disconnect &&
-          msg != MessageActor.Stop)
-        println("Message failed to send from " + fromName + " to " +
+          msg != MessageActor.Stop) {
+        log.warning("Message failed to send from " + fromName + " to " +
           toName + ": " + msg.utf8String)
+      }
     }
   }
 }

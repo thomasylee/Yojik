@@ -9,7 +9,7 @@ import xyz.thomaslee.yojik.ConnectionActor
 import xyz.thomaslee.yojik.messages.MessageActor
 
 object TcpConnectionActor {
-  def props(connection: ActorRef) =
+  def props(connection: ActorRef): Props =
     Props(classOf[TcpConnectionActor], connection)
 }
 
@@ -25,11 +25,11 @@ class TcpConnectionActor(connection: ActorRef) extends Actor with ActorLogging {
 
   var mostRecentSender: Option[ActorRef] = None
 
-  override def postStop = println("TcpConnectionActor stopped")
+  override def postStop: Unit = log.debug("TcpConnectionActor stopped")
 
   def receive: Receive = {
     case ConnectionActor.Disconnect => {
-      println("Disconnect!")
+      log.debug("TCP connection disconnected")
       connection ! Close
       messageActor ! MessageActor.Stop
       context.stop(self)
@@ -39,11 +39,11 @@ class TcpConnectionActor(connection: ActorRef) extends Actor with ActorLogging {
       messageActor ! MessageActor.ProcessMessage(data)
     }
     case ConnectionActor.ReplyToSender(message) => {
-      println("Sent: " + message.utf8String)
+      log.debug("Sent: " + message.utf8String)
       if (mostRecentSender.isDefined) mostRecentSender.get ! Write(message)
     }
     case PeerClosed => {
-      println("Peer closed!")
+      log.debug("TCP connection peer closed")
       messageActor ! MessageActor.Stop
       context.stop(self)
     }

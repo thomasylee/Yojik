@@ -35,11 +35,11 @@ class InvalidNamespaceError(prefix: Option[String], message: Option[String])
   extends XmlStreamError(prefix, "invalid-namespace", message)
 
 class StartTlsError(val message: String) {
-  override def toString = "<failure xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>"
+  override def toString: String = "<failure xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>"
 }
 
 class FailureWithDefinedCondition(condition: String) {
-  override def toString =
+  override def toString: String =
     s"""<failure xmlns='urn:ietf:params:xml:ns:xmpp-sasl'>
        |  <${ condition }/>
        |</failure>""".stripMargin

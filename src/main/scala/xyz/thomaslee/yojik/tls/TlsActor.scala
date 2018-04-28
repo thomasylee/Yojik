@@ -6,6 +6,7 @@ import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.security.KeyStore
 import javax.net.ssl.{ KeyManagerFactory, SSLContext, TrustManagerFactory }
+import scala.util.Try
 import tlschannel.ServerTlsChannel
 
 import xyz.thomaslee.yojik.messages.MessageActor
@@ -27,26 +28,24 @@ class TlsActor extends Actor with ActorLogging {
 
   lazy val tlsListener = context.actorOf(TlsListeningActor.props(tlsChannel))
 
-  override def postStop: Unit = {
-    println("TlsActor stopped")
-  }
+  override def postStop: Unit = log.debug("TlsActor stopped")
 
   def receive: Receive = {
     case TlsActor.ProcessMessage(bytes) => {
-      println("Tls SentFromClient: " + bytes.length)
+      log.debug("TLS bytes SentFromClient: " + bytes.length)
       rawTlsChannel.storeIncomingBytes(ByteBuffer.wrap(bytes.toArray[Byte]))
       tlsListener ! TlsListeningActor.Listen
     }
     case TlsActor.SendToServer(bytes) =>
       context.parent ! MessageActor.ProcessDecryptedMessage(bytes)
     case TlsActor.SendToClient(bytes) =>
-      println("Tls SentToClient: " + bytes.length)
+      log.debug("TLS bytes SentToClient: " + bytes.length)
       context.parent ! MessageActor.PassToClient(bytes)
     case TlsActor.SendEncryptedToClient(bytes) =>
       tlsChannel.write(ByteBuffer.wrap(bytes.toArray[Byte]))
     case TlsActor.Stop => {
-      try { tlsChannel.close } catch { case _: Throwable => {} }
-      try { rawTlsChannel.close } catch { case _: Throwable => {} }
+      Try(tlsChannel.close)
+      Try(rawTlsChannel.close)
       context.stop(self)
     }
   }
@@ -59,7 +58,7 @@ class TlsActor extends Actor with ActorLogging {
     val keyStore  = KeyStore.getInstance("JKS");
     val fileInputStream = new FileInputStream("keystore.jks")
     keyStore.load(fileInputStream, keyStorePassword)
-    try { fileInputStream.close } catch { case _: Throwable => {} }
+    Try(fileInputStream.close)
 
     val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
     tmf.init(keyStore);

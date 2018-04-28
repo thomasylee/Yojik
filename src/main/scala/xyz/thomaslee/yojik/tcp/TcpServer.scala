@@ -8,13 +8,15 @@ import scala.util.Random
 import Tcp.{ Bind, Bound, CommandFailed, Connected, Register }
 
 class TcpServer extends Actor with ActorLogging {
-  import context.system
+  implicit val system = context.system
 
-  IO(Tcp) ! Bind(self, new InetSocketAddress("localhost", 5222))
+  val port = 5222
 
-  override def postStop = println("TcpServer stopped")
+  IO(Tcp) ! Bind(self, new InetSocketAddress("localhost", port))
 
-  def receive = {
+  override def postStop: Unit = log.debug("TcpServer stopped")
+
+  def receive: Receive = {
     case bound @ Bound(localAddress) => context.parent ! bound
     case CommandFailed(_: Bind) => context.stop(self)
     case Connected(remote, _) =>
