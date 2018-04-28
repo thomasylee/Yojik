@@ -27,7 +27,7 @@ class TcpConnectionActor(connection: ActorRef) extends Actor with ActorLogging {
 
   override def postStop = println("TcpConnectionActor stopped")
 
-  def receive = {
+  def receive: Receive = {
     case ConnectionActor.Disconnect => {
       println("Disconnect!")
       connection ! Close

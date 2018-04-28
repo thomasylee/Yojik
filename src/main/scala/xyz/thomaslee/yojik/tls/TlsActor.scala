@@ -27,7 +27,7 @@ class TlsActor extends Actor with ActorLogging {
 
   lazy val tlsListener = context.actorOf(TlsListeningActor.props(tlsChannel))
 
-  override def postStop = {
+  override def postStop: Unit = {
     println("TlsActor stopped")
   }
 

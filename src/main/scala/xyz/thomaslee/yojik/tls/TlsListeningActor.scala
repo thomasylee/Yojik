@@ -8,12 +8,12 @@ import tlschannel.ServerTlsChannel
 object TlsListeningActor {
   case object Listen
 
-  def props(tlsChannel: ServerTlsChannel) =
+  def props(tlsChannel: ServerTlsChannel): Props =
     Props(classOf[TlsListeningActor], tlsChannel)
 }
 
 class TlsListeningActor(tlsChannel: ServerTlsChannel) extends Actor with ActorLogging {
-  override def postStop = println("TlsListeningActor stopped")
+  override def postStop: Unit = println("TlsListeningActor stopped")
 
   def receive: Receive = {
     case TlsListeningActor.Listen => {

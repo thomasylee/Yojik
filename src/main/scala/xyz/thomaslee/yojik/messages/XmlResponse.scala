@@ -3,7 +3,7 @@ package xyz.thomaslee.yojik.messages
 import scala.xml.{ Attribute, Elem, Null, XML }
 
 object XmlResponse {
-  def insertPrefix(prefix: Option[String]) = prefix match {
+  def insertPrefix(prefix: Option[String]): String = prefix match {
     case Some(pre) => pre + ":"
     case None => ""
   }
@@ -18,7 +18,7 @@ object XmlResponse {
    * @param recipient the stream requester as identified in the original "from" field
    * @return a String representation of the opening <stream/> tag
    */
-  def openStream(prefix: Option[String], contentNamespace: Option[String], streamId: String, recipient: Option[String]) =
+  def openStream(prefix: Option[String], contentNamespace: Option[String], streamId: String, recipient: Option[String]): String =
     s"""<${ insertPrefix(prefix) }stream
        |    ${ if (contentNamespace.isDefined) s"xmlns='${ contentNamespace.get }'" else "" }
        |    xmlns:stream='http://etherx.jabber.org/streams'
@@ -34,10 +34,10 @@ object XmlResponse {
    * @param prefix the <stream/> tag prefix, or None if no prefix is used
    * @return a String representation of the closing <stream/> tag
    */
-  def closeStream(prefix: Option[String]) =
+  def closeStream(prefix: Option[String]): String =
     s"""</${ insertPrefix(prefix) }stream>"""
 
-  def startTlsStreamFeature(prefix: Option[String]) =
+  def startTlsStreamFeature(prefix: Option[String]): String =
     s"""<${ insertPrefix(prefix) }features>
        |  <starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'>
        |    <required/>
@@ -46,7 +46,7 @@ object XmlResponse {
 
   val proceedWithTls = "<proceed xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>"
 
-  def saslStreamFeature(prefix: Option[String], includeExternal: Boolean = false) =
+  def saslStreamFeature(prefix: Option[String], includeExternal: Boolean = false): String =
     s"""<${ insertPrefix(prefix) }features>
        |  <mechanisms xmlns='urn:ietf:params:xml:ns:xmpp-sasl'>
        |    ${ if (includeExternal) "<mechanism>EXTERNAL</mechanism>" else "" }
@@ -58,7 +58,7 @@ object XmlResponse {
 
   val saslSuccess = "<success xmlns='urn:ietf:params:xml:ns:xmpp-sasl'/>"
 
-  def resourceBindFeature(prefix: Option[String]) =
+  def resourceBindFeature(prefix: Option[String]): String =
     s"""<${ insertPrefix(prefix) }:features>
        |  <bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'/>
        |</${ insertPrefix(prefix) }:features>""".stripMargin

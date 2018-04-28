@@ -28,7 +28,7 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
 
   var authAttributes: Option[Map[String, Any]] = None
 
-  override def postStop = {
+  override def postStop: Unit = {
     println("XmlParsingActor stopped")
     xmlReader.close
   }
@@ -81,8 +81,12 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
                 authAttributes match {
                   case None => None
                   case Some(attributes) =>
-                    if (attributes("mechanism") == null) None
-                    else Some(attributes("mechanism").toString)
+                    if (attributes("mechanism") == null) {
+                      None
+                    }
+                    else {
+                      Some(attributes("mechanism").toString)
+                    }
                 },
                 if (namespace == null) None else Some(namespace),
                 lastText)

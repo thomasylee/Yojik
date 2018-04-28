@@ -27,7 +27,7 @@ class MessageActor extends Actor with ActorLogging {
   var xmlOutputStream = new PipedOutputStream
   var xmlInputStream = new PipedInputStream(xmlOutputStream)
 
-  def stop = {
+  def stop: Unit = {
     context.stop(self)
     try { xmlOutputStream.close } catch { case _: Throwable => {} }
     try { xmlInputStream.close } catch { case _: Throwable => {} }
@@ -35,7 +35,7 @@ class MessageActor extends Actor with ActorLogging {
   }
   override def postStop = println("MessageActor stopped")
 
-  def receive = openXmlStream(context.actorOf(
+  def receive: Receive = openXmlStream(context.actorOf(
     XmlParsingActor.props(xmlInputStream),
     "xml-parsing-actor-" + Random.alphanumeric.take(10).mkString))
 
@@ -159,47 +159,6 @@ class MessageActor extends Actor with ActorLogging {
       }
       else mechanism match {
         case Some("PLAIN") =>
-          try {
-            base64Value match {
-              case None => {
-                tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
-                  new FailureWithDefinedCondition("incorrect-encoding").toString))
-              }
-              case Some(base64Str) => {
-                // Strip out the authcid, so only authzid and passwd remain.
-                val lastParts = Base64.getDecoder().decode(base64Str).dropWhile(_ != 0)
-
-                // Split the remainder into Nul-authzid and Nul-passwd.
-                val partsWithNul = lastParts.splitAt(lastParts.lastIndexOf(0))
-
-                // Remove the Nuls to get the username and password.
-                val username = new String(partsWithNul._1.drop(1))
-                val password = new String(partsWithNul._2.drop(1))
-
-                // Use fake credentials until there's a database of some kind.
-                if (username == "test_username" && password == "test_password") {
-                  tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
-                    XmlResponse.saslSuccess))
-
-                  context.become(bindResource(
-                    prefix,
-                    tlsActor,
-                    xmlParser,
-                    username))
-                }
-                else {
-                  tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
-                    new FailureWithDefinedCondition("not-authorized").toString))
-                }
-              }
-            }
-          }
-          catch {
-            // Base64 decoding failed, so reply with an incorrect-encoding error.
-            case _: IllegalArgumentException =>
-              tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
-                new FailureWithDefinedCondition("incorrect-encoding").toString))
-          }
         case _ => {
           tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
             new FailureWithDefinedCondition("invalid-mechanism").toString))
@@ -232,12 +191,63 @@ class MessageActor extends Actor with ActorLogging {
   }
 
   /**
+   * Authenticate with SASL with the PLAIN mechanism.
+   *
+   * @param prefix the XML stream namespace prefix
+   * @param tlsActor the TlsActor for encrypting the connection
+   * @param xmlParser the XmlParsingActor to parse the XML stream elements
+   * @param base64Value the base64 value passed in the auth element
+   */
+  def authenticateWithSaslPlain(prefix: Option[String], tlsActor: ActorRef, xmlParser: ActorRef, base64Value: Option[String]) =
+    try {
+      base64Value match {
+        case None => {
+          tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
+            new FailureWithDefinedCondition("incorrect-encoding").toString))
+        }
+        case Some(base64Str) => {
+          // Strip out the authcid, so only authzid and passwd remain.
+          val lastParts = Base64.getDecoder().decode(base64Str).dropWhile(_ != 0)
+
+          // Split the remainder into Nul-authzid and Nul-passwd.
+          val partsWithNul = lastParts.splitAt(lastParts.lastIndexOf(0))
+
+          // Remove the Nuls to get the username and password.
+          val username = new String(partsWithNul._1.drop(1))
+          val password = new String(partsWithNul._2.drop(1))
+
+          // Use fake credentials until there's a database of some kind.
+          if (username == "test_username" && password == "test_password") {
+            tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
+              XmlResponse.saslSuccess))
+
+            context.become(bindResource(
+              prefix,
+              tlsActor,
+              xmlParser,
+              username))
+          }
+          else {
+            tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
+              new FailureWithDefinedCondition("not-authorized").toString))
+          }
+        }
+      }
+    }
+    catch {
+      // Base64 decoding failed, so reply with an incorrect-encoding error.
+      case _: IllegalArgumentException =>
+        tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
+          new FailureWithDefinedCondition("incorrect-encoding").toString))
+    }
+
+  /**
    * Returns the ByteString with trailing \u0000 characters removed.
    *
    * @param bytes the ByteString to remove padding from
    * @return a ByteString equal to the original, minus trailing \u0000 characters
    */
-  def removePaddingFromDecryptedBytes(bytes: ByteString) = {
+  def removePaddingFromDecryptedBytes(bytes: ByteString): ByteString = {
     @tailrec
     def findLastNulIndex(index: Int): Int =
       if (index == 0) bytes.length
@@ -247,7 +257,7 @@ class MessageActor extends Actor with ActorLogging {
     bytes.take(findLastNulIndex(bytes.length - 1))
   }
 
-  def handleStreamError(error: XmlStreamError, includeOpenStream: Boolean = false) = {
+  def handleStreamError(error: XmlStreamError, includeOpenStream: Boolean = false): Unit = {
     error.message match {
       case Some(errorMessage) => log.warning(s"${ error.errorType }: $errorMessage")
       case None => log.warning(error.errorType)
@@ -265,7 +275,7 @@ class MessageActor extends Actor with ActorLogging {
     stop
   }
 
-  def handleStreamErrorWithTls(error: XmlStreamError, tlsActor: ActorRef) = {
+  def handleStreamErrorWithTls(error: XmlStreamError, tlsActor: ActorRef): Unit = {
     error.message match {
       case Some(errorMessage) => log.warning(s"${ error.errorType }: $errorMessage")
       case None => log.warning(error.errorType)
@@ -277,12 +287,14 @@ class MessageActor extends Actor with ActorLogging {
   }
 
   def validateOpenStreamRequest(request: XmlParsingActor.OpenStream): Option[XmlStreamError] =
-    if (request.namespaceUri != MessageActor.ValidStreamNamespace)
+    if (request.namespaceUri != MessageActor.ValidStreamNamespace) {
       Some(new InvalidNamespaceError(request.prefix, Some(request.namespaceUri)))
-    else
+    }
+    else {
       None
+    }
 
-  def buildOpenStreamTag(request: XmlParsingActor.OpenStream) =
+  def buildOpenStreamTag(request: XmlParsingActor.OpenStream): String =
     XmlResponse.openStream(
       prefix = request.prefix,
       contentNamespace = Some("jabber:client"),
@@ -290,12 +302,14 @@ class MessageActor extends Actor with ActorLogging {
       recipient = request.attributes.get("from"))
 
   def handleStartTls(request: XmlParsingActor.StartTls): Option[StartTlsError] =
-    if (request.namespaceUri != MessageActor.ValidStartTlsNamespace)
+    if (request.namespaceUri != MessageActor.ValidStartTlsNamespace) {
       Some(new StartTlsError(request.namespaceUri))
-    else
+    }
+    else {
       None
+    }
 
-  def recreateXmlParser(xmlParser: ActorRef) = {
+  def recreateXmlParser(xmlParser: ActorRef): ActorRef = {
     context.stop(xmlParser)
     try { xmlOutputStream.close } catch { case _: Throwable => {} }
     try { xmlInputStream.close } catch { case _: Throwable => {} }

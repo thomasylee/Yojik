@@ -18,9 +18,9 @@ class RawTlsChannel(tlsActor: ActorRef) extends ByteChannel {
 
   val incomingBytes = new Queue[ByteBuffer]
 
-  override def close = open = false
+  override def close: Unit = open = false
 
-  override def isOpen = open
+  override def isOpen: Boolean = open
 
   /**
    * Returns the number of bytes read into the given ByteBuffer. This reads
@@ -57,5 +57,5 @@ class RawTlsChannel(tlsActor: ActorRef) extends ByteChannel {
     bytes.length
   }
 
-  def storeIncomingBytes(buffer: ByteBuffer) = incomingBytes += buffer
+  def storeIncomingBytes(buffer: ByteBuffer): Unit = incomingBytes += buffer
 }
