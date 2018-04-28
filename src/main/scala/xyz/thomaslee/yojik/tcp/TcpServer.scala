@@ -7,12 +7,12 @@ import java.net.InetSocketAddress
 import scala.util.Random
 import Tcp.{ Bind, Bound, CommandFailed, Connected, Register }
 
+import xyz.thomaslee.yojik.config.ConfigMap
+
 class TcpServer extends Actor with ActorLogging {
   implicit val system = context.system
 
-  val port = 5222
-
-  IO(Tcp) ! Bind(self, new InetSocketAddress("localhost", port))
+  IO(Tcp) ! Bind(self, new InetSocketAddress("localhost", ConfigMap.serverPort))
 
   override def postStop: Unit = log.debug("TcpServer stopped")
 
@@ -22,7 +22,8 @@ class TcpServer extends Actor with ActorLogging {
     case Connected(remote, _) =>
       val handler = context.actorOf(
         TcpConnectionActor.props(sender),
-        "tcp-connection-actor-" + Random.alphanumeric.take(10).mkString)
+        "tcp-connection-actor-" + Random.alphanumeric.take(
+          ConfigMap.randomCharsInActorNames).mkString)
       sender ! Register(handler)
   }
 }

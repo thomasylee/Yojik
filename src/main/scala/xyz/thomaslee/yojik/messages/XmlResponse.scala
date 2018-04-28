@@ -20,11 +20,11 @@ object XmlResponse {
    */
   def openStream(prefix: Option[String], contentNamespace: Option[String], streamId: String, recipient: Option[String]): String =
     s"""<${ insertPrefix(prefix) }stream
-       |    ${ if (contentNamespace.isDefined) s"xmlns='${ contentNamespace.get }'" else "" }
+       |    ${ contentNamespace match { case Some(ns) => s"xmlns='$ns'" case None => "" }}
        |    xmlns:stream='http://etherx.jabber.org/streams'
        |    id='$streamId'
        |    from='localhost'
-       |    ${ if (recipient.isDefined) s"to='${ recipient.get }'" else "" }
+       |    ${ recipient match { case Some(r) => s"to='$r'" case None => "" }}
        |    version='1.0'>""".stripMargin
 
   /**

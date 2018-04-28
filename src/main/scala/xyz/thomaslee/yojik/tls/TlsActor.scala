@@ -6,9 +6,10 @@ import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.security.KeyStore
 import javax.net.ssl.{ KeyManagerFactory, SSLContext, TrustManagerFactory }
-import scala.util.Try
+import scala.util.{ Random, Try }
 import tlschannel.ServerTlsChannel
 
+import xyz.thomaslee.yojik.config.ConfigMap
 import xyz.thomaslee.yojik.messages.MessageActor
 
 object TlsActor {
@@ -26,7 +27,10 @@ class TlsActor extends Actor with ActorLogging {
     .newBuilder(rawTlsChannel, sslContext)
     .build();
 
-  lazy val tlsListener = context.actorOf(TlsListeningActor.props(tlsChannel))
+  lazy val tlsListener = context.actorOf(
+    TlsListeningActor.props(tlsChannel),
+    "xml-listening-actor-" + Random.alphanumeric.take(
+      ConfigMap.randomCharsInActorNames).mkString)
 
   override def postStop: Unit = log.debug("TlsActor stopped")
 
@@ -56,7 +60,7 @@ class TlsActor extends Actor with ActorLogging {
     val keyStorePassword = Array[Char]('y', 'o', 'j', 'i', 'k', 'y', 'o', 'j', 'i', 'k')
 
     val keyStore  = KeyStore.getInstance("JKS");
-    val fileInputStream = new FileInputStream("keystore.jks")
+    val fileInputStream = new FileInputStream(ConfigMap.keyStore)
     keyStore.load(fileInputStream, keyStorePassword)
     Try(fileInputStream.close)
 

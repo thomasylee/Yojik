@@ -10,6 +10,7 @@ import scala.util.{ Failure, Random, Success, Try }
 import scala.xml.XML
 
 import xyz.thomaslee.yojik.ConnectionActor
+import xyz.thomaslee.yojik.config.ConfigMap
 import xyz.thomaslee.yojik.tls.TlsActor
 
 // TODO: Break this into separate files by behavior.
@@ -37,7 +38,8 @@ class MessageActor extends Actor with ActorLogging {
 
   def receive: Receive = openXmlStream(context.actorOf(
     XmlParsingActor.props(xmlInputStream),
-    "xml-parsing-actor-" + Random.alphanumeric.take(10).mkString))
+    "xml-parsing-actor-" + Random.alphanumeric.take(
+      ConfigMap.randomCharsInActorNames).mkString))
 
   def openXmlStream(xmlParser: ActorRef): Receive = {
     case MessageActor.ProcessMessage(message) => {
@@ -86,7 +88,8 @@ class MessageActor extends Actor with ActorLogging {
           prefix,
           context.actorOf(
             Props(classOf[TlsActor]),
-            "tls-actor-" + Random.alphanumeric.take(10).mkString),
+            "tls-actor-" + Random.alphanumeric.take(
+              ConfigMap.randomCharsInActorNames).mkString),
           recreateXmlParser(xmlParser)))
       }
     }
@@ -151,19 +154,18 @@ class MessageActor extends Actor with ActorLogging {
     case XmlParsingActor.CloseStream =>
       tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
         XmlResponse.closeStream(prefix)))
-    case XmlParsingActor.AuthenticateWithSasl(mechanism, namespace, base64Value) =>
-      if (namespace.isEmpty || namespace.get != "urn:ietf:params:xml:ns:xmpp-sasl") {
-        tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
-          new FailureWithDefinedCondition("malformed-request").toString))
-      }
-      else {
+    case XmlParsingActor.AuthenticateWithSasl(mechanism, namespace, base64Value) => namespace match {
+      case Some(ns) if ns == "urn:ietf:params:xml:ns:xmpp-sasl" =>
         mechanism match {
           case Some("PLAIN") => authenticateWithSaslPlain(prefix, tlsActor, xmlParser, base64Value)
           case _ =>
             tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
               new FailureWithDefinedCondition("invalid-mechanism").toString))
         }
-      }
+      case _ =>
+        tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
+          new FailureWithDefinedCondition("malformed-request").toString))
+    }
   }
 
   // TODO: Do the resource binding.
@@ -196,7 +198,7 @@ class MessageActor extends Actor with ActorLogging {
    * @param xmlParser the XmlParsingActor to parse the XML stream elements
    * @param base64Value the base64 value passed in the auth element
    */
-  def authenticateWithSaslPlain(prefix: Option[String], tlsActor: ActorRef, xmlParser: ActorRef, base64Value: Option[String]) =
+  def authenticateWithSaslPlain(prefix: Option[String], tlsActor: ActorRef, xmlParser: ActorRef, base64Value: Option[String]): Unit =
     base64Value match {
       case None => {
         tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
@@ -326,6 +328,7 @@ class MessageActor extends Actor with ActorLogging {
 
     context.actorOf(
       XmlParsingActor.props(xmlInputStream),
-      "xml-parsing-actor-" + Random.alphanumeric.take(10).mkString)
+      "xml-parsing-actor-" + Random.alphanumeric.take(
+        ConfigMap.randomCharsInActorNames).mkString)
   }
 }

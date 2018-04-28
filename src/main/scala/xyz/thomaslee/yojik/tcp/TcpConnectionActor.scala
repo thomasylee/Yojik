@@ -6,6 +6,7 @@ import akka.util.ByteString
 import scala.util.Random
 
 import xyz.thomaslee.yojik.ConnectionActor
+import xyz.thomaslee.yojik.config.ConfigMap
 import xyz.thomaslee.yojik.messages.MessageActor
 
 object TcpConnectionActor {
@@ -21,7 +22,8 @@ object TcpConnectionActor {
 class TcpConnectionActor(connection: ActorRef) extends Actor with ActorLogging {
   lazy val messageActor = context.actorOf(
     Props(classOf[MessageActor]),
-    "message-actor-" + Random.alphanumeric.take(10).mkString)
+    "message-actor-" + Random.alphanumeric.take(
+      ConfigMap.randomCharsInActorNames).mkString)
 
   var mostRecentSender: Option[ActorRef] = None
 
@@ -40,7 +42,10 @@ class TcpConnectionActor(connection: ActorRef) extends Actor with ActorLogging {
     }
     case ConnectionActor.ReplyToSender(message) => {
       log.debug("Sent: " + message.utf8String)
-      if (mostRecentSender.isDefined) mostRecentSender.get ! Write(message)
+      mostRecentSender match {
+        case Some(sender) => sender ! Write(message)
+        case None => {}
+      }
     }
     case PeerClosed => {
       log.debug("TCP connection peer closed")

@@ -12,7 +12,7 @@ object XmlParsingActor {
   case class OpenStream(val prefix: Option[String], val namespaceUri: String, val attributes: Map[String, String])
   case class StartTls(namespaceUri: String)
 
-  def props(inputStream: InputStream) =
+  def props(inputStream: InputStream): Props =
     Props(classOf[XmlParsingActor], inputStream)
 }
 
@@ -41,13 +41,12 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
             depth += 1
             if (depth == 1 && xmlReader.getName.getLocalPart == "stream") {
               // Prefixes can be null, "", or a non-empty String.
-              streamPrefix =
-                if (xmlReader.getPrefix == null || xmlReader.getPrefix == "") {
-                  None
-                }
-                else {
-                  Some(xmlReader.getPrefix)
-                }
+              streamPrefix = Option(xmlReader.getPrefix) match {
+                case None => None
+                case Some(prefix) =>
+                  if (prefix == "") { None }
+                  else { Some(prefix) }
+              }
 
               // Need attributes to determine "to" field.
               context.parent ! XmlParsingActor.OpenStream(
@@ -84,15 +83,12 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
               context.parent ! XmlParsingActor.AuthenticateWithSasl(
                 authAttributes match {
                   case None => None
-                  case Some(attributes) =>
-                    if (attributes("mechanism") == null) {
-                      None
-                    }
-                    else {
-                      Some(attributes("mechanism").toString)
-                    }
+                  case Some(attributes) => Option(attributes("mechanism")) match {
+                    case None => None
+                    case Some(mech) => Some(mech.toString)
+                  }
                 },
-                if (namespace == null) None else Some(namespace),
+                Option(namespace),
                 lastText)
             }
           }

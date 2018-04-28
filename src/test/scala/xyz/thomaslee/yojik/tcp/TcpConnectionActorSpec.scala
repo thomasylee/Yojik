@@ -28,8 +28,11 @@ class TcpConnectionActorSpec extends TestKit(ActorSystem("TcpConnectionActorSpec
     "stops when PeerClosed is received" in {
       val connection = system.actorOf(Props(classOf[MockActor]))
       val connActor = system.actorOf(TcpConnectionActor.props(connection))
+      val waitTimeMilliseconds = 10
+
       connActor ! PeerClosed
-      expectNoMessage(FiniteDuration(10, "ms"))
+
+      expectNoMessage(FiniteDuration(waitTimeMilliseconds, "ms"))
     }
   }
 }
