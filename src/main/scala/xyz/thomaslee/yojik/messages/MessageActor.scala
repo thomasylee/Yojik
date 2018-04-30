@@ -277,16 +277,11 @@ class MessageActor extends Actor with ActorLogging {
    */
   def removePaddingFromDecryptedBytes(bytes: ByteString): ByteString = {
     @tailrec
-    def findLastNulIndex(index: Int): Int =
-      if (index == 0) {
-        bytes.length
-      }
-      else if (bytes(index) != 0) {
-        index + 1
-      }
-      else {
-        findLastNulIndex(index - 1)
-      }
+    def findLastNulIndex(index: Int): Int = index match {
+      case 0 => bytes.length
+      case ind if bytes(ind) != 0 => ind + 1
+      case _ => findLastNulIndex(index - 1)
+    }
 
     bytes.take(findLastNulIndex(bytes.length - 1))
   }
