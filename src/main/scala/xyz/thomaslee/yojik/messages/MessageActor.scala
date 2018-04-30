@@ -31,7 +31,6 @@ class MessageActor extends Actor with ActorLogging {
   def stop: Unit = {
     context.stop(self)
     try { xmlOutputStream.close } catch { case _: Throwable => {} }
-    try { xmlInputStream.close } catch { case _: Throwable => {} }
     context.parent ! ConnectionActor.Disconnect
   }
   override def postStop: Unit = log.debug("MessageActor stopped")
@@ -43,8 +42,14 @@ class MessageActor extends Actor with ActorLogging {
 
   def openXmlStream(xmlParser: ActorRef): Receive = {
     case MessageActor.ProcessMessage(message) => {
-      xmlParser ! XmlParsingActor.Parse
-      xmlOutputStream.write(message.toArray[Byte])
+      Try(xmlOutputStream.write(message.toArray[Byte])) match {
+        case Success(_) => xmlParser ! XmlParsingActor.Parse
+        case Failure(error) => {
+          log.warning(error.toString)
+          handleStreamError(new BadFormatError(None, None), true)
+          stop
+        }
+      }
     }
     case error: XmlStreamError => handleStreamError(error, true)
     case request: XmlParsingActor.OpenStream =>
@@ -69,13 +74,19 @@ class MessageActor extends Actor with ActorLogging {
   def startTls(prefix: Option[String], xmlParser: ActorRef): Receive = {
     case MessageActor.ProcessMessage(message) => {
       log.debug("Received: " + message.utf8String)
-      xmlParser ! XmlParsingActor.Parse
-      xmlOutputStream.write(message.toArray[Byte])
+      Try(xmlOutputStream.write(message.toArray[Byte])) match {
+        case Success(_) => xmlParser ! XmlParsingActor.Parse
+        case Failure(error) => {
+          log.warning(error.toString)
+          handleStreamError(new BadFormatError(prefix, None), false)
+          stop
+        }
+      }
     }
     case error: XmlStreamError => handleStreamError(error, true)
     case tls: XmlParsingActor.StartTls => handleStartTls(tls) match {
       case Some(error: StartTlsError) => {
-        log.warning(s"StartTls failure: ${error.message}")
+        log.warning("StartTls failure")
         context.parent ! ConnectionActor.ReplyToSender(ByteString(
           error.toString + "\n" + XmlResponse.closeStream(prefix)))
         stop
@@ -103,13 +114,18 @@ class MessageActor extends Actor with ActorLogging {
   }
 
   def negotiateTls(prefix: Option[String], tlsActor: ActorRef, xmlParser: ActorRef): Receive = {
-    case MessageActor.ProcessMessage(message) => {
+    case MessageActor.ProcessMessage(message) =>
       tlsActor ! TlsActor.ProcessMessage(message)
-    }
     case MessageActor.ProcessDecryptedMessage(message) => {
       log.debug("Decrypted: " + message.utf8String)
-      xmlOutputStream.write(removePaddingFromDecryptedBytes(message).toArray[Byte])
-      xmlParser ! XmlParsingActor.Parse
+      Try(xmlOutputStream.write(message.toArray[Byte])) match {
+        case Success(_) => xmlParser ! XmlParsingActor.Parse
+        case Failure(error) => {
+          log.warning(error.toString)
+          handleStreamError(new BadFormatError(prefix, None), false)
+          stop
+        }
+      }
     }
     case MessageActor.PassToClient(message) =>
       context.parent ! ConnectionActor.ReplyToSender(message)
@@ -141,8 +157,14 @@ class MessageActor extends Actor with ActorLogging {
     }
     case MessageActor.ProcessDecryptedMessage(message) => {
       log.debug("Decrypted: " + message.utf8String)
-      xmlOutputStream.write(removePaddingFromDecryptedBytes(message).toArray[Byte])
-      xmlParser ! XmlParsingActor.Parse
+      Try(xmlOutputStream.write(message.toArray[Byte])) match {
+        case Success(_) => xmlParser ! XmlParsingActor.Parse
+        case Failure(error) => {
+          log.warning(error.toString)
+          handleStreamError(new BadFormatError(prefix, None), false)
+          stop
+        }
+      }
     }
     case MessageActor.PassToClient(message) =>
       context.parent ! ConnectionActor.ReplyToSender(message)
@@ -174,8 +196,14 @@ class MessageActor extends Actor with ActorLogging {
       tlsActor ! TlsActor.ProcessMessage(message)
     case MessageActor.ProcessDecryptedMessage(message) => {
       log.debug("Decrypted: " + message.utf8String)
-      xmlOutputStream.write(removePaddingFromDecryptedBytes(message).toArray[Byte])
-      xmlParser ! XmlParsingActor.Parse
+      Try(xmlOutputStream.write(message.toArray[Byte])) match {
+        case Success(_) => xmlParser ! XmlParsingActor.Parse
+        case Failure(error) => {
+          log.warning(error.toString)
+          handleStreamError(new BadFormatError(prefix, None), false)
+          stop
+        }
+      }
     }
     case MessageActor.PassToClient(message) =>
       context.parent ! ConnectionActor.ReplyToSender(message)
@@ -272,7 +300,7 @@ class MessageActor extends Actor with ActorLogging {
     val openStreamIfNeeded =
       if (includeOpenStream) {
         buildOpenStreamTag(XmlParsingActor.OpenStream(
-          error.prefix, MessageActor.ValidStreamNamespace, Map())) + "\n"
+          error.prefix, Some(MessageActor.ValidStreamNamespace), Map())) + "\n"
       }
       else {
         ""
@@ -295,13 +323,10 @@ class MessageActor extends Actor with ActorLogging {
     stop
   }
 
-  def validateOpenStreamRequest(request: XmlParsingActor.OpenStream): Option[XmlStreamError] =
-    if (request.namespaceUri != MessageActor.ValidStreamNamespace) {
-      Some(new InvalidNamespaceError(request.prefix, Some(request.namespaceUri)))
-    }
-    else {
-      None
-    }
+  def validateOpenStreamRequest(request: XmlParsingActor.OpenStream): Option[XmlStreamError] = request.namespaceUri match {
+    case Some(uri) if uri == MessageActor.ValidStreamNamespace => None
+    case _ => Some(new InvalidNamespaceError(request.prefix, request.namespaceUri))
+  }
 
   def buildOpenStreamTag(request: XmlParsingActor.OpenStream): String =
     XmlResponse.openStream(
@@ -310,18 +335,14 @@ class MessageActor extends Actor with ActorLogging {
       streamId = "abc",
       recipient = request.attributes.get("from"))
 
-  def handleStartTls(request: XmlParsingActor.StartTls): Option[StartTlsError] =
-    if (request.namespaceUri != MessageActor.ValidStartTlsNamespace) {
-      Some(new StartTlsError(request.namespaceUri))
-    }
-    else {
-      None
-    }
+  def handleStartTls(request: XmlParsingActor.StartTls): Option[StartTlsError] = request.namespaceUri match {
+    case Some(uri) if uri == MessageActor.ValidStartTlsNamespace => None
+    case _ => Some(new StartTlsError)
+  }
 
   def recreateXmlParser(xmlParser: ActorRef): ActorRef = {
     context.stop(xmlParser)
     try { xmlOutputStream.close } catch { case _: Throwable => {} }
-    try { xmlInputStream.close } catch { case _: Throwable => {} }
 
     xmlOutputStream = new PipedOutputStream
     xmlInputStream = new PipedInputStream(xmlOutputStream)

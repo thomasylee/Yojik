@@ -2,104 +2,120 @@ package xyz.thomaslee.yojik.messages
 
 import akka.actor.{ Actor, ActorLogging, Props }
 import java.io.InputStream
-import javax.xml.stream.{ XMLInputFactory, XMLStreamConstants, XMLStreamException, XMLStreamReader }
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.DurationInt
+import scala.io.BufferedSource
+import scala.xml.MetaData
+import scala.xml.pull.{ EvElemEnd, EvElemStart, EvText, XMLEventReader }
 
 object XmlParsingActor {
   case object Parse
 
   case class AuthenticateWithSasl(mechanism: Option[String], namespaceUri: Option[String], value: Option[String])
   case class CloseStream(streamPrefix: Option[String])
-  case class OpenStream(val prefix: Option[String], val namespaceUri: String, val attributes: Map[String, String])
-  case class StartTls(namespaceUri: String)
+  case class OpenStream(val prefix: Option[String], val namespaceUri: Option[String], val attributes: Map[String, String])
+  case class StartTls(namespaceUri: Option[String])
 
   def props(inputStream: InputStream): Props =
     Props(classOf[XmlParsingActor], inputStream)
 }
 
 class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging {
-  val xmlReader: XMLStreamReader =
-    XMLInputFactory.newInstance.createXMLStreamReader(inputStream)
+  val xmlReader: XMLEventReader = new XMLEventReader(new BufferedSource(inputStream))
 
   var streamPrefix: Option[String] = None
 
-  var depth = 0
-
   var lastText: Option[String] = None
 
-  var authAttributes: Option[Map[String, Any]] = None
+  var tlsNamespaceUri: Option[String] = None
+
+  var authNamespaceUri: Option[String] = None
+
+  var authAttributes: Option[MetaData] = None
 
   override def postStop: Unit = {
     log.debug("XmlParsingActor stopped")
-    xmlReader.close
+    xmlReader.stop
+    try { inputStream.close } catch { case _: Throwable => {} }
   }
 
-  def receive: Receive = {
-    case XmlParsingActor.Parse => {
-      try {
-        Some(xmlReader.next) collect {
-          case XMLStreamConstants.START_ELEMENT => {
-            depth += 1
-            if (depth == 1 && xmlReader.getName.getLocalPart == "stream") {
-              // Prefixes can be null, "", or a non-empty String.
-              streamPrefix = Option(xmlReader.getPrefix) match {
-                case None => None
-                case Some(prefix) =>
-                  if (prefix == "") { None }
-                  else { Some(prefix) }
-              }
+  def receive: Receive = parseXml(0)
 
-              // Need attributes to determine "to" field.
-              context.parent ! XmlParsingActor.OpenStream(
-                streamPrefix,
-                xmlReader.getNamespaceURI,
-                (0 until xmlReader.getAttributeCount).map(i =>
-                  (xmlReader.getAttributeName(i).getLocalPart, xmlReader.getAttributeValue(i))
-                ).toMap
-              )
-            }
-            else if (depth == 2 && xmlReader.getName.getLocalPart == "auth") {
-              authAttributes = Some((0 until xmlReader.getAttributeCount).map(i =>
-                (xmlReader.getAttributeName(i).getLocalPart, xmlReader.getAttributeValue(i))
-              ).toMap)
-            }
-            else if (depth == 0) {
-              context.parent ! new ServiceUnavailableError(None, Some(
-                s"<${ xmlReader.getName.getLocalPart }/> must instead be <stream/>"))
-            }
-          }
-          case XMLStreamConstants.END_ELEMENT => {
-            depth -= 1
-            if (depth == 0) {
-              log.debug("XML stream closed")
-              context.parent ! XmlParsingActor.CloseStream(streamPrefix)
-            }
-            else if (depth == 1 && xmlReader.getName.getLocalPart == "starttls") {
-              log.debug("<starttls/> received")
-              context.parent ! XmlParsingActor.StartTls(xmlReader.getNamespaceURI)
-            }
-            else if (depth == 1 && xmlReader.getName.getLocalPart == "auth") {
-              val namespace = xmlReader.getNamespaceURI
-              val value = lastText
-              context.parent ! XmlParsingActor.AuthenticateWithSasl(
-                authAttributes match {
-                  case None => None
-                  case Some(attributes) => Option(attributes("mechanism")) match {
-                    case None => None
-                    case Some(mech) => Some(mech.toString)
-                  }
-                },
-                Option(namespace),
-                lastText)
-            }
-          }
-          case XMLStreamConstants.CHARACTERS => lastText = Some(xmlReader.getText())
-          case XMLStreamConstants.CDATA => lastText = Some(xmlReader.getText())
+  def parseXml(depth: Int): Receive = {
+    case XmlParsingActor.Parse =>
+      if (xmlReader.available) {
+        Some(xmlReader.next) collect {
+          case EvText(text) => lastText = Some(text)
+          case event: EvElemStart => handleStartElement(depth, event)
+          case event: EvElemEnd => handleEndElement(depth, event)
         }
 
-        if (xmlReader.hasNext) self ! XmlParsingActor.Parse
-      } catch {
-        case error: XMLStreamException if !error.toString.contains("Pipe closed") =>
-          context.parent ! new BadFormatError(None, Some(error.toString))
+        // If the stream has more events ready, go ahead and parse them.
+        if (xmlReader.available) { self ! XmlParsingActor.Parse }
+      }
+      else {
+        // Try again since parsing XML from the InputStream may take some time.
+        context.system.scheduler.scheduleOnce(50 milliseconds, self, XmlParsingActor.Parse)
+      }
+  }
+
+  def handleStartElement(depth: Int, event: EvElemStart): Unit = event match {
+    case EvElemStart(prefix, label, attributes, namespace) => {
+      context.become(parseXml(depth + 1))
+
+      val namespaceUri = Option(namespace) match {
+        case None => None
+        case Some(ns) => Option(ns.getURI(prefix))
+      }
+
+      Option(depth, label) collect {
+        case (0, "stream") => {
+          streamPrefix = Option(prefix)
+
+          // Need attributes to determine "to" and "from" fields.
+          context.parent ! XmlParsingActor.OpenStream(
+            streamPrefix,
+            namespaceUri,
+            attributes.asAttrMap
+          )
+        }
+        case (1, "starttls") => tlsNamespaceUri = namespaceUri
+        case (1, "auth") => {
+          authNamespaceUri = namespaceUri
+          authAttributes = Option(attributes)
+        }
+        case (0, _) =>
+          context.parent ! new ServiceUnavailableError(None, Some(
+            s"<$label/> must instead be <stream/>"))
+      }
+    }
+  }
+
+  def handleEndElement(depth: Int, event: EvElemEnd): Unit = event match {
+    case EvElemEnd(prefix, label) => {
+      context.become(parseXml(depth - 1))
+
+      Option(depth, label) collect {
+        case (1, _) => {
+          log.debug("XML stream closed")
+          context.parent ! XmlParsingActor.CloseStream(streamPrefix)
+        }
+        case (2, "starttls") => {
+          log.debug("<starttls/> received")
+          context.parent ! XmlParsingActor.StartTls(tlsNamespaceUri)
+        }
+        case (2, "auth") => {
+          context.parent ! XmlParsingActor.AuthenticateWithSasl(
+            authAttributes match {
+              case None => None
+              case Some(attributes) => Option(attributes("mechanism")) match {
+                case None => None
+                case Some(mech) => Some(mech.toString)
+              }
+            },
+            authNamespaceUri,
+            lastText)
+        }
       }
     }
   }

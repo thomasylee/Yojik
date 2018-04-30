@@ -34,7 +34,7 @@ class ServiceUnavailableError(prefix: Option[String], message: Option[String])
 class InvalidNamespaceError(prefix: Option[String], message: Option[String])
   extends XmlStreamError(prefix, "invalid-namespace", message)
 
-class StartTlsError(val message: String) {
+class StartTlsError {
   override def toString: String = "<failure xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>"
 }
 
