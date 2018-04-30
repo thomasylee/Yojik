@@ -1,4 +1,4 @@
-package xyz.thomaslee.yojik.messages
+package xyz.thomaslee.yojik.xml
 
 import akka.actor.{ Actor, ActorLogging, Props }
 import java.io.InputStream
@@ -94,6 +94,7 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
   def handleEndElement(depth: Int, event: EvElemEnd): Unit = event match {
     case EvElemEnd(prefix, label) => {
       context.become(parseXml(depth - 1))
+      println("DEPTH: " + depth)
 
       Option(depth, label) collect {
         case (1, _) => {

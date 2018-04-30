@@ -7,7 +7,7 @@ import scala.util.Random
 
 import xyz.thomaslee.yojik.ConnectionActor
 import xyz.thomaslee.yojik.config.ConfigMap
-import xyz.thomaslee.yojik.messages.MessageActor
+import xyz.thomaslee.yojik.xmlstream.XmlStreamActor
 
 object TcpConnectionActor {
   def props(connection: ActorRef): Props =
@@ -21,8 +21,8 @@ object TcpConnectionActor {
  */
 class TcpConnectionActor(connection: ActorRef) extends Actor with ActorLogging {
   lazy val messageActor = context.actorOf(
-    Props(classOf[MessageActor]),
-    "message-actor-" + Random.alphanumeric.take(
+    Props(classOf[XmlStreamActor]),
+    "xml-stream-actor-" + Random.alphanumeric.take(
       ConfigMap.randomCharsInActorNames).mkString)
 
   var mostRecentSender: Option[ActorRef] = None
@@ -33,15 +33,14 @@ class TcpConnectionActor(connection: ActorRef) extends Actor with ActorLogging {
     case ConnectionActor.Disconnect => {
       log.debug("TCP connection disconnected")
       connection ! Close
-      messageActor ! MessageActor.Stop
+      messageActor ! XmlStreamActor.Stop
       context.stop(self)
     }
     case Received(data: ByteString) => {
       mostRecentSender = Some(sender)
-      messageActor ! MessageActor.ProcessMessage(data)
+      messageActor ! XmlStreamActor.ProcessMessage(data)
     }
     case ConnectionActor.ReplyToSender(message) => {
-      log.debug("Sent: " + message.utf8String)
       mostRecentSender match {
         case Some(sender) => sender ! Write(message)
         case None => {}
@@ -49,7 +48,7 @@ class TcpConnectionActor(connection: ActorRef) extends Actor with ActorLogging {
     }
     case PeerClosed => {
       log.debug("TCP connection peer closed")
-      messageActor ! MessageActor.Stop
+      messageActor ! XmlStreamActor.Stop
       context.stop(self)
     }
   }

@@ -1,6 +1,4 @@
-package xyz.thomaslee.yojik.messages
-
-import scala.xml.{ Attribute, Elem, Null, XML }
+package xyz.thomaslee.yojik.xml
 
 object XmlResponse {
   def insertPrefix(prefix: Option[String]): String = prefix match {

@@ -1,4 +1,4 @@
-package xyz.thomaslee.yojik.messages
+package xyz.thomaslee.yojik.xml
 
 /**
  * XmlStreamError is the parent class of all XMPP stream errors.

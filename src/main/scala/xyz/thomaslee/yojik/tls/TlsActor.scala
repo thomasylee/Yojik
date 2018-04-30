@@ -10,7 +10,7 @@ import scala.util.{ Random, Try }
 import tlschannel.ServerTlsChannel
 
 import xyz.thomaslee.yojik.config.ConfigMap
-import xyz.thomaslee.yojik.messages.MessageActor
+import xyz.thomaslee.yojik.xmlstream.XmlStreamActor
 
 object TlsActor {
   case class ProcessMessage(bytes: ByteString)
@@ -41,10 +41,10 @@ class TlsActor extends Actor with ActorLogging {
       tlsListener ! TlsListeningActor.Listen
     }
     case TlsActor.SendToServer(bytes) =>
-      context.parent ! MessageActor.ProcessDecryptedMessage(bytes)
+      context.parent ! XmlStreamActor.ProcessDecryptedMessage(bytes)
     case TlsActor.SendToClient(bytes) =>
       log.debug("TLS bytes SentToClient: " + bytes.length)
-      context.parent ! MessageActor.PassToClient(bytes)
+      context.parent ! XmlStreamActor.PassToClient(bytes)
     case TlsActor.SendEncryptedToClient(bytes) =>
       tlsChannel.write(ByteBuffer.wrap(bytes.toArray[Byte]))
     case TlsActor.Stop => {

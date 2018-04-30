@@ -1,4 +1,4 @@
-package xyz.thomaslee.yojik.messages
+package xyz.thomaslee.yojik.xmlstream
 
 import akka.actor.{ Actor, ActorLogging, ActorRef, PoisonPill, Props }
 import akka.util.ByteString
@@ -12,9 +12,13 @@ import scala.xml.XML
 import xyz.thomaslee.yojik.ConnectionActor
 import xyz.thomaslee.yojik.config.ConfigMap
 import xyz.thomaslee.yojik.tls.TlsActor
+import xyz.thomaslee.yojik.xml.{
+  BadFormatError, FailureWithDefinedCondition, InvalidNamespaceError,
+  StartTlsError, XmlParsingActor, XmlResponse, XmlStreamError
+}
 
 // TODO: Break this into separate files by behavior.
-object MessageActor {
+object XmlStreamActor {
   case class PassToClient(message: ByteString)
   case class ProcessMessage(message: ByteString)
   case class ProcessDecryptedMessage(message: ByteString)
@@ -24,7 +28,7 @@ object MessageActor {
   val ValidStartTlsNamespace = "urn:ietf:params:xml:ns:xmpp-tls"
 }
 
-class MessageActor extends Actor with ActorLogging {
+class XmlStreamActor extends Actor with ActorLogging {
   var xmlOutputStream = new PipedOutputStream
   var xmlInputStream = new PipedInputStream(xmlOutputStream)
 
@@ -33,7 +37,7 @@ class MessageActor extends Actor with ActorLogging {
     try { xmlOutputStream.close } catch { case _: Throwable => {} }
     context.parent ! ConnectionActor.Disconnect
   }
-  override def postStop: Unit = log.debug("MessageActor stopped")
+  override def postStop: Unit = log.debug("XmlStreamActor stopped")
 
   def receive: Receive = openXmlStream(context.actorOf(
     XmlParsingActor.props(xmlInputStream),
@@ -41,7 +45,7 @@ class MessageActor extends Actor with ActorLogging {
       ConfigMap.randomCharsInActorNames).mkString))
 
   def openXmlStream(xmlParser: ActorRef): Receive = {
-    case MessageActor.ProcessMessage(message) => {
+    case XmlStreamActor.ProcessMessage(message) => {
       Try(xmlOutputStream.write(message.toArray[Byte])) match {
         case Success(_) => xmlParser ! XmlParsingActor.Parse
         case Failure(error) => {
@@ -68,11 +72,11 @@ class MessageActor extends Actor with ActorLogging {
 
       stop
     }
-    case MessageActor.Stop => stop
+    case XmlStreamActor.Stop => stop
   }
 
   def startTls(prefix: Option[String], xmlParser: ActorRef): Receive = {
-    case MessageActor.ProcessMessage(message) => {
+    case XmlStreamActor.ProcessMessage(message) => {
       log.debug("Received: " + message.utf8String)
       Try(xmlOutputStream.write(message.toArray[Byte])) match {
         case Success(_) => xmlParser ! XmlParsingActor.Parse
@@ -110,13 +114,13 @@ class MessageActor extends Actor with ActorLogging {
 
       stop
     }
-    case MessageActor.Stop => stop
+    case XmlStreamActor.Stop => stop
   }
 
   def negotiateTls(prefix: Option[String], tlsActor: ActorRef, xmlParser: ActorRef): Receive = {
-    case MessageActor.ProcessMessage(message) =>
+    case XmlStreamActor.ProcessMessage(message) =>
       tlsActor ! TlsActor.ProcessMessage(message)
-    case MessageActor.ProcessDecryptedMessage(message) => {
+    case XmlStreamActor.ProcessDecryptedMessage(message) => {
       log.debug("Decrypted: " + message.utf8String)
       Try(xmlOutputStream.write(message.toArray[Byte])) match {
         case Success(_) => xmlParser ! XmlParsingActor.Parse
@@ -127,9 +131,9 @@ class MessageActor extends Actor with ActorLogging {
         }
       }
     }
-    case MessageActor.PassToClient(message) =>
+    case XmlStreamActor.PassToClient(message) =>
       context.parent ! ConnectionActor.ReplyToSender(message)
-    case MessageActor.Stop => {
+    case XmlStreamActor.Stop => {
       tlsActor ! TlsActor.Stop
       stop
     }
@@ -152,10 +156,10 @@ class MessageActor extends Actor with ActorLogging {
   }
 
   def saslAuthenticate(prefix: Option[String], tlsActor: ActorRef, xmlParser: ActorRef): Receive = {
-    case MessageActor.ProcessMessage(message) => {
+    case XmlStreamActor.ProcessMessage(message) => {
       tlsActor ! TlsActor.ProcessMessage(message)
     }
-    case MessageActor.ProcessDecryptedMessage(message) => {
+    case XmlStreamActor.ProcessDecryptedMessage(message) => {
       log.debug("Decrypted: " + message.utf8String)
       Try(xmlOutputStream.write(message.toArray[Byte])) match {
         case Success(_) => xmlParser ! XmlParsingActor.Parse
@@ -166,9 +170,9 @@ class MessageActor extends Actor with ActorLogging {
         }
       }
     }
-    case MessageActor.PassToClient(message) =>
+    case XmlStreamActor.PassToClient(message) =>
       context.parent ! ConnectionActor.ReplyToSender(message)
-    case MessageActor.Stop => {
+    case XmlStreamActor.Stop => {
       tlsActor ! TlsActor.Stop
       stop
     }
@@ -192,9 +196,9 @@ class MessageActor extends Actor with ActorLogging {
 
   // TODO: Do the resource binding.
   def bindResource(prefix: Option[String], tlsActor: ActorRef, xmlParser: ActorRef, user: String): Receive = {
-    case MessageActor.ProcessMessage(message) =>
+    case XmlStreamActor.ProcessMessage(message) =>
       tlsActor ! TlsActor.ProcessMessage(message)
-    case MessageActor.ProcessDecryptedMessage(message) => {
+    case XmlStreamActor.ProcessDecryptedMessage(message) => {
       log.debug("Decrypted: " + message.utf8String)
       Try(xmlOutputStream.write(message.toArray[Byte])) match {
         case Success(_) => xmlParser ! XmlParsingActor.Parse
@@ -205,9 +209,9 @@ class MessageActor extends Actor with ActorLogging {
         }
       }
     }
-    case MessageActor.PassToClient(message) =>
+    case XmlStreamActor.PassToClient(message) =>
       context.parent ! ConnectionActor.ReplyToSender(message)
-    case MessageActor.Stop => {
+    case XmlStreamActor.Stop => {
       tlsActor ! TlsActor.Stop
       stop
     }
@@ -238,12 +242,16 @@ class MessageActor extends Actor with ActorLogging {
             // Strip out the authcid, so only authzid and passwd remain.
             val lastParts = Base64.getDecoder().decode(base64Str).dropWhile(_ != 0)
 
-            // Split the remainder into Nul-authzid and Nul-passwd.
-            val (username: String, password: String) =
-              lastParts.splitAt(lastParts.lastIndexOf(0)) match {
+            // Split the remainder into Nul-authzid and Nul-passwd, then extract
+            // the username and password.
+            val (username: String, password: String) = lastParts
+              .splitAt(lastParts.lastIndexOf(0))
+              .productIterator
+              .toList
+              .map { case bytes: Array[Byte] => new String(bytes) } match {
                 // Remove the Nuls to get the username and password.
-                case (user, pswd) => (user.drop(1), pswd.drop(1))
-                case _ => {}
+                case List(user, pswd) => (user.drop(1), pswd.drop(1))
+                case a => ("", "")
               }
 
             // Use fake credentials until there's a database of some kind.
@@ -296,7 +304,7 @@ class MessageActor extends Actor with ActorLogging {
     val openStreamIfNeeded =
       if (includeOpenStream) {
         buildOpenStreamTag(XmlParsingActor.OpenStream(
-          error.prefix, Some(MessageActor.ValidStreamNamespace), Map())) + "\n"
+          error.prefix, Some(XmlStreamActor.ValidStreamNamespace), Map())) + "\n"
       }
       else {
         ""
@@ -320,7 +328,7 @@ class MessageActor extends Actor with ActorLogging {
   }
 
   def validateOpenStreamRequest(request: XmlParsingActor.OpenStream): Option[XmlStreamError] = request.namespaceUri match {
-    case Some(uri) if uri == MessageActor.ValidStreamNamespace => None
+    case Some(uri) if uri == XmlStreamActor.ValidStreamNamespace => None
     case _ => Some(new InvalidNamespaceError(request.prefix, request.namespaceUri))
   }
 
@@ -332,7 +340,7 @@ class MessageActor extends Actor with ActorLogging {
       recipient = request.attributes.get("from"))
 
   def handleStartTls(request: XmlParsingActor.StartTls): Option[StartTlsError] = request.namespaceUri match {
-    case Some(uri) if uri == MessageActor.ValidStartTlsNamespace => None
+    case Some(uri) if uri == XmlStreamActor.ValidStartTlsNamespace => None
     case _ => Some(new StartTlsError)
   }
 
