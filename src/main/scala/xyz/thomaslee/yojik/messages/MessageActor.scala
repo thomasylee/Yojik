@@ -239,11 +239,12 @@ class MessageActor extends Actor with ActorLogging {
             val lastParts = Base64.getDecoder().decode(base64Str).dropWhile(_ != 0)
 
             // Split the remainder into Nul-authzid and Nul-passwd.
-            val partsWithNul = lastParts.splitAt(lastParts.lastIndexOf(0))
-
-            // Remove the Nuls to get the username and password.
-            val username = new String(partsWithNul._1.drop(1))
-            val password = new String(partsWithNul._2.drop(1))
+            val (username: String, password: String) =
+              lastParts.splitAt(lastParts.lastIndexOf(0)) match {
+                // Remove the Nuls to get the username and password.
+                case (user, pswd) => (user.drop(1), pswd.drop(1))
+                case _ => {}
+              }
 
             // Use fake credentials until there's a database of some kind.
             if (username == "test_username" && password == "test_password") {
