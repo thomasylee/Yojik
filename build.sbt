@@ -9,7 +9,9 @@ scalaVersion := "2.12.5"
 scalacOptions ++= Seq(
   "-deprecation",
   "-encoding", "utf8",
-  "-unchecked"
+  "-unchecked",
+  "-Ywarn-unused",
+  "-Ywarn-unused-import"
 )
 
 resolvers += "Typesafe Repository" at "https://repo.typesafe.com/typesafe/releases/"

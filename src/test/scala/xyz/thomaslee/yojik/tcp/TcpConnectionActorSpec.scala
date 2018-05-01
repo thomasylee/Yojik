@@ -1,10 +1,8 @@
-import akka.actor.{ Actor, ActorRef, ActorSystem, Props }
-import akka.io.Tcp.{ NoAck, PeerClosed, Received, Write }
-import akka.testkit.{ ImplicitSender, TestActors, TestKit }
-import akka.util.ByteString
-import java.net.InetSocketAddress
+import akka.actor.{ Actor, ActorSystem, Props }
+import akka.io.Tcp.PeerClosed
+import akka.testkit.{ ImplicitSender, TestKit }
 import org.scalamock.scalatest.MockFactory
-import org.scalatest.{ BeforeAndAfterAll, FlatSpec, Matchers, WordSpecLike }
+import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
 import scala.concurrent.duration.FiniteDuration
 
 import xyz.thomaslee.yojik.tcp.TcpConnectionActor

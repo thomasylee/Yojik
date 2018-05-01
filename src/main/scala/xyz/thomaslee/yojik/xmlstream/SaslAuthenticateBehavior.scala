@@ -1,6 +1,6 @@
 package xyz.thomaslee.yojik.xmlstream
 
-import akka.actor.{ ActorRef, Props }
+import akka.actor.ActorRef
 import akka.actor.Actor.Receive
 import akka.event.LoggingAdapter
 import akka.util.ByteString
@@ -80,7 +80,7 @@ object SaslAuthenticateBehavior {
         Try(Base64.getDecoder().decode(base64Str)) match {
           case Success(decoded) => {
             // Strip out the authcid, so only authzid and passwd remain.
-            val lastParts = Base64.getDecoder().decode(base64Str).dropWhile(_ != 0)
+            val lastParts = decoded.dropWhile(_ != 0)
 
             // Split the remainder into Nul-authzid and Nul-passwd, then extract
             // the username and password.
@@ -91,7 +91,7 @@ object SaslAuthenticateBehavior {
               .map { case bytes: Array[Byte] => new String(bytes) } match {
                 // Remove the Nuls to get the username and password.
                 case List(user, pswd) => (user.drop(1), pswd.drop(1))
-                case a => ("", "")
+                case _ => ("", "")
               }
 
             // Use fake credentials until there's a database of some kind.

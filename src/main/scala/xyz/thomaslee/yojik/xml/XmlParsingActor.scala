@@ -92,7 +92,7 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
   }
 
   def handleEndElement(depth: Int, event: EvElemEnd): Unit = event match {
-    case EvElemEnd(prefix, label) => {
+    case EvElemEnd(_, label) => {
       context.become(parseXml(depth - 1))
 
       Option(depth, label) collect {
