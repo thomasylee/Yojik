@@ -5,7 +5,7 @@ scala:
 jdk:
   - openjdk8
 script:
-  - sbt clean coverage test
+  - sbt -Dakka.loglevel=ERROR clean coverage test
   - sbt coverageReport
   - sbt coverageAggregate
   - sbt scalastyle
