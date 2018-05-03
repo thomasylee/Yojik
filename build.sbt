@@ -9,6 +9,7 @@ scalaVersion := "2.12.5"
 scalacOptions ++= Seq(
   "-deprecation",
   "-encoding", "utf8",
+  "-feature",
   "-unchecked",
   "-Ywarn-unused",
   "-Ywarn-unused-import"
