@@ -1,15 +1,15 @@
-import akka.actor.{ Actor, ActorSystem, Props }
-import akka.io.Tcp.PeerClosed
-import akka.testkit.{ ImplicitSender, TestKit }
+import akka.actor.{ ActorSystem, Props }
+import akka.io.Tcp
+import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
+import akka.util.ByteString
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.DurationInt
+import scala.language.postfixOps
 
+import xyz.thomaslee.yojik.ConnectionActor
 import xyz.thomaslee.yojik.tcp.TcpConnectionActor
-
-class MockActor extends Actor {
-  def receive: Receive = { case _ => {} }
-}
+import xyz.thomaslee.yojik.xmlstream.XmlStreamActor
 
 class TcpConnectionActorSpec extends TestKit(ActorSystem("TcpConnectionActorSpec"))
   with MockFactory
@@ -22,15 +22,66 @@ class TcpConnectionActorSpec extends TestKit(ActorSystem("TcpConnectionActorSpec
     TestKit.shutdownActorSystem(system)
   }
 
-  "EchoHandler actor" must {
-    "stops when PeerClosed is received" in {
-      val connection = system.actorOf(Props(classOf[MockActor]))
-      val connActor = system.actorOf(TcpConnectionActor.props(connection))
-      val waitTimeMilliseconds = 10
+  "TcpConnectionActor" must {
+    "disconnect when Disconnect is received" in {
+      val connection = TestProbe("Tcp")
+      val xmlStreamActor = TestProbe("XmlStreamActor")
+      val connActor = system.actorOf(Props(new TcpConnectionActor(connection.ref) {
+        override def receive: Receive = unauthenticatedConnection(xmlStreamActor.ref)
+      }))
 
-      connActor ! PeerClosed
+      val deathWatcher = TestProbe()
+      deathWatcher.watch(connActor)
 
-      expectNoMessage(FiniteDuration(waitTimeMilliseconds, "ms"))
+      connActor ! ConnectionActor.Disconnect
+
+      connection.expectMsg(200 millis, Tcp.Close)
+      xmlStreamActor.expectMsg(200 millis, XmlStreamActor.Stop)
+      deathWatcher.expectTerminated(connActor)
+    }
+
+    "stop when PeerClosed is received" in {
+      val connection = TestProbe("Tcp")
+      val xmlStreamActor = TestProbe("XmlStreamActor")
+      val connActor = system.actorOf(Props(new TcpConnectionActor(connection.ref) {
+        override def receive: Receive = unauthenticatedConnection(xmlStreamActor.ref)
+      }))
+
+      val deathWatcher = TestProbe()
+      deathWatcher.watch(connActor)
+
+      connActor ! Tcp.PeerClosed
+
+      xmlStreamActor.expectMsg(200 millis, XmlStreamActor.Stop)
+      deathWatcher.expectTerminated(connActor)
+    }
+
+    "forward data from Received to XmlStreamActor" in {
+      val connection = TestProbe("Tcp")
+      val xmlStreamActor = TestProbe("XmlStreamActor")
+      val connActor = system.actorOf(Props(new TcpConnectionActor(connection.ref) {
+        override def receive: Receive = unauthenticatedConnection(xmlStreamActor.ref)
+      }))
+
+      val data = ByteString("UTF-8 message: ёжик")
+      connActor ! Tcp.Received(data)
+
+      xmlStreamActor.expectMsg(200 millis, XmlStreamActor.ProcessMessage(data))
+    }
+
+    "send ReplyToSender messages to the TCP sender" in {
+      val connection = TestProbe("Tcp")
+      val xmlStreamActor = TestProbe("XmlStreamActor")
+      val tcpSender = TestProbe("TcpSender")
+      val connActor = system.actorOf(Props(new TcpConnectionActor(connection.ref) {
+        mostRecentSender = Some(tcpSender.ref)
+        override def receive: Receive = unauthenticatedConnection(xmlStreamActor.ref)
+      }))
+
+      val data = ByteString("UTF-8 message: ёжик")
+      connActor ! ConnectionActor.ReplyToSender(data)
+
+      tcpSender.expectMsg(200 millis, Tcp.Write(data))
     }
   }
 }

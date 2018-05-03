@@ -55,7 +55,7 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
       }
       else {
         // Try again since parsing XML from the InputStream may take some time.
-        context.system.scheduler.scheduleOnce(50 milliseconds, self, XmlParsingActor.Parse)
+        context.system.scheduler.scheduleOnce(50 millis, self, XmlParsingActor.Parse)
       }
   }
 

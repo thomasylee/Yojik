@@ -20,25 +20,26 @@ object TcpConnectionActor {
  * connection.
  */
 class TcpConnectionActor(connection: ActorRef) extends Actor with ActorLogging {
-  lazy val messageActor = context.actorOf(
-    Props(classOf[XmlStreamActor]),
-    "xml-stream-actor-" + Random.alphanumeric.take(
-      ConfigMap.randomCharsInActorNames).mkString)
-
   var mostRecentSender: Option[ActorRef] = None
 
   override def postStop: Unit = log.debug("TcpConnectionActor stopped")
 
-  def receive: Receive = {
+  def receive: Receive = unauthenticatedConnection(
+    context.actorOf(
+      Props(classOf[XmlStreamActor]),
+      "xml-stream-actor-" + Random.alphanumeric.take(
+        ConfigMap.randomCharsInActorNames).mkString))
+
+  def unauthenticatedConnection(xmlStreamActor: ActorRef): Receive = {
     case ConnectionActor.Disconnect => {
       log.debug("TCP connection disconnected")
       connection ! Close
-      messageActor ! XmlStreamActor.Stop
+      xmlStreamActor ! XmlStreamActor.Stop
       context.stop(self)
     }
     case Received(data: ByteString) => {
       mostRecentSender = Some(sender)
-      messageActor ! XmlStreamActor.ProcessMessage(data)
+      xmlStreamActor ! XmlStreamActor.ProcessMessage(data)
     }
     case ConnectionActor.ReplyToSender(message) => {
       mostRecentSender match {
@@ -48,7 +49,7 @@ class TcpConnectionActor(connection: ActorRef) extends Actor with ActorLogging {
     }
     case PeerClosed => {
       log.debug("TCP connection peer closed")
-      messageActor ! XmlStreamActor.Stop
+      xmlStreamActor ! XmlStreamActor.Stop
       context.stop(self)
     }
   }
