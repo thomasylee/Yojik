@@ -12,11 +12,11 @@ import xyz.thomaslee.yojik.tcp.TcpConnectionActor
 import xyz.thomaslee.yojik.xmlstream.XmlStreamActor
 
 class TcpConnectionActorSpec extends TestKit(ActorSystem("TcpConnectionActorSpec"))
-  with MockFactory
-  with ImplicitSender
-  with WordSpecLike
-  with Matchers
-  with BeforeAndAfterAll {
+    with MockFactory
+    with ImplicitSender
+    with WordSpecLike
+    with Matchers
+    with BeforeAndAfterAll {
 
   override def afterAll {
     TestKit.shutdownActorSystem(system)

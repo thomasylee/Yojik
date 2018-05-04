@@ -40,8 +40,9 @@ class RawTlsChannel(tlsActor: ActorRef) extends ByteChannel {
       toWrite.length
     }
     else {
-      buffer.put(incomingBytes.head)
-      incomingBytes.dequeue.capacity + read(buffer)
+      val readBytes = incomingBytes.head.remaining
+      buffer.put(incomingBytes.dequeue)
+      readBytes + read(buffer)
     }
 
   /**
