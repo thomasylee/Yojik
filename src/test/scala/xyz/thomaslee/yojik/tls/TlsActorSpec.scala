@@ -90,7 +90,7 @@ class TlsActorSpec extends TestKit(ActorSystem("TlsActorSpec"))
 
       (tlsChannel.write _).when(*).returns(data.size)
 
-      (tlsChannel.write _).verify(where { (bytes: ByteBuffer) => 
+      (tlsChannel.write _).verify(where { (bytes: ByteBuffer) =>
         bytes.array() === data.toArray[Byte]
       })
     }

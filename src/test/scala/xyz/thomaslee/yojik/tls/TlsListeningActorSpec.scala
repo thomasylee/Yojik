@@ -42,16 +42,11 @@ class TlsListeningActorSpec extends TestKit(ActorSystem("TlsListeningActorSpec")
 
 def removePaddingFromDecryptedBytes(bytes: ByteString): ByteString = {
   @tailrec
-  def findLastNulIndex(index: Int): Int =
-    if (index == 0) {
-      bytes.length
-    }
-    else if (bytes(index) != 0) {
-      index + 1
-    }
-    else {
-      findLastNulIndex(index - 1)
-    }
+  def findLastNulIndex(index: Int): Int = index match {
+    case 0 => bytes.length
+    case index if bytes(index) != 0 => index + 1
+    case _ => findLastNulIndex(index - 1)
+  }
 
   bytes.take(findLastNulIndex(bytes.length - 1))
 }
@@ -72,13 +67,11 @@ def removePaddingFromDecryptedBytes(bytes: ByteString): ByteString = {
 
       tlsListener ! TlsListeningActor.Listen
 
-      for (datum <- data) {
-        println(datum.utf8String)
+      for (datum <- data)
         tlsActor.expectMsgPF(200 millis) {
           case TlsActor.SendToServer(message) if
             removePaddingFromDecryptedBytes(message) == datum => ()
         }
-      }
     }
   }
 }
