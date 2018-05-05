@@ -37,7 +37,7 @@ class RawTlsChannelSpec extends TestKit(ActorSystem("RawTlsChannelSpec"))
       tlsActor.expectMsg(200 millis, TlsActor.SendToClient(ByteString(message)))
     }
 
-    "data inputted by storeIncomingBytes() can be read by read()" in {
+    "be able to read data inputted by storeIncomingBytes() with read()" in {
       val tlsActor = system.actorOf(TestActors.blackholeProps)
       val channel = new RawTlsChannel(tlsActor)
       val message = ByteBuffer.wrap("ABC".getBytes)

@@ -7,41 +7,15 @@ import akka.util.ByteString
 import java.util.Base64
 import scala.util.{ Failure, Success, Try }
 
-import xyz.thomaslee.yojik.ConnectionActor
 import xyz.thomaslee.yojik.tls.TlsActor
 import xyz.thomaslee.yojik.xml.{
-  BadFormatError, FailureWithDefinedCondition, XmlParsingActor, XmlResponse,
-  XmlStreamError
+  FailureWithDefinedCondition, XmlParsingActor, XmlResponse
 }
 
 object SaslAuthenticateBehavior {
   val ValidSaslNamespace = "urn:ietf:params:xml:ns:xmpp-sasl"
 
   def apply(log: LoggingAdapter, self: XmlStreamActor, xmlParser: ActorRef, prefix: Option[String], tlsActor: ActorRef): Receive = {
-    case XmlStreamActor.ProcessMessage(message) => {
-      tlsActor ! TlsActor.ProcessMessage(message)
-    }
-    case XmlStreamActor.ProcessDecryptedMessage(message) => {
-      log.debug("Decrypted: " + message.utf8String)
-      Try(self.xmlOutputStream.write(message.toArray[Byte])) match {
-        case Success(_) => xmlParser ! XmlParsingActor.Parse
-        case Failure(error) => {
-          log.warning(error.toString)
-          self.handleStreamError(new BadFormatError(prefix, None), false)
-          self.stop
-        }
-      }
-    }
-    case XmlStreamActor.PassToClient(message) =>
-      self.tcpConnectionActor ! ConnectionActor.ReplyToSender(message)
-    case XmlStreamActor.Stop => {
-      tlsActor ! TlsActor.Stop
-      self.stop
-    }
-    case error: XmlStreamError => self.handleStreamErrorWithTls(error, tlsActor)
-    case XmlParsingActor.CloseStream =>
-      tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
-        XmlResponse.closeStream(prefix)))
     case XmlParsingActor.AuthenticateWithSasl(mechanism, namespace, base64Value) => namespace match {
       case Some(ns) if ns == ValidSaslNamespace => mechanism match {
         case Some("PLAIN") =>
@@ -54,6 +28,7 @@ object SaslAuthenticateBehavior {
         tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
           new FailureWithDefinedCondition("malformed-request").toString))
     }
+    case _ => HandleTlsMessage(log, self, xmlParser, prefix, tlsActor)(_)
   }
 
   /**
