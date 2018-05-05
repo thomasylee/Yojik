@@ -1,9 +1,10 @@
 package xyz.thomaslee.yojik.tls
 
-import akka.actor.{ Actor, ActorLogging, Props }
+import akka.actor.{ Actor, ActorLogging, ActorRef }
 import akka.util.ByteString
 import java.io.FileInputStream
 import java.nio.ByteBuffer
+import java.nio.channels.ByteChannel
 import java.security.KeyStore
 import javax.net.ssl.{ KeyManagerFactory, SSLContext, TrustManagerFactory }
 import scala.util.{ Random, Try }
@@ -21,32 +22,38 @@ object TlsActor {
 }
 
 class TlsActor extends Actor with ActorLogging {
-  lazy val rawTlsChannel = new RawTlsChannel(self)
-  lazy val sslContext = createSslContext
-  lazy val tlsChannel = ServerTlsChannel
-    .newBuilder(rawTlsChannel, sslContext)
-    .build();
-
-  lazy val tlsListener = context.actorOf(
-    TlsListeningActor.props(tlsChannel),
-    "xml-listening-actor-" + Random.alphanumeric.take(
-      ConfigMap.randomCharsInActorNames).mkString)
-
   override def postStop: Unit = log.debug("TlsActor stopped")
 
   def receive: Receive = {
+    val rawTlsChannel = new RawTlsChannel(self)
+    val sslContext = createSslContext
+    val tlsChannel = ServerTlsChannel
+      .newBuilder(rawTlsChannel, sslContext)
+      .build();
+
+    val tlsListener = context.actorOf(
+      TlsListeningActor.props(tlsChannel),
+      "xml-listening-actor-" + Random.alphanumeric.take(
+        ConfigMap.randomCharsInActorNames).mkString)
+
+    handleTlsMessages(rawTlsChannel, tlsChannel, context.parent, tlsListener)
+  }
+
+  def handleTlsMessages(rawTlsChannel: RawTlsChannel, tlsChannel: ByteChannel, xmlStreamActor: ActorRef, tlsListener: ActorRef): Receive = {
     case TlsActor.ProcessMessage(bytes) => {
       log.debug("TLS bytes SentFromClient: " + bytes.length)
       rawTlsChannel.storeIncomingBytes(ByteBuffer.wrap(bytes.toArray[Byte]))
       tlsListener ! TlsListeningActor.Listen
     }
     case TlsActor.SendToServer(bytes) =>
-      context.parent ! XmlStreamActor.ProcessDecryptedMessage(bytes)
-    case TlsActor.SendToClient(bytes) =>
+      xmlStreamActor ! XmlStreamActor.ProcessDecryptedMessage(bytes)
+    case TlsActor.SendToClient(bytes) => {
       log.debug("TLS bytes SentToClient: " + bytes.length)
-      context.parent ! XmlStreamActor.PassToClient(bytes)
-    case TlsActor.SendEncryptedToClient(bytes) =>
+      xmlStreamActor ! XmlStreamActor.PassToClient(bytes)
+    }
+    case TlsActor.SendEncryptedToClient(bytes) => {
       tlsChannel.write(ByteBuffer.wrap(bytes.toArray[Byte]))
+    }
     case TlsActor.Stop => {
       Try(tlsChannel.close)
       Try(rawTlsChannel.close)
