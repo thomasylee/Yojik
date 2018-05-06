@@ -6,9 +6,9 @@ import akka.event.LoggingAdapter
 
 object BindResourceBehavior {
   def apply(log: LoggingAdapter, self: XmlStreamActor, xmlParser: ActorRef, prefix: Option[String], tlsActor: ActorRef, user: String): Receive = {
-    case _ => {
+    case message => {
       log.debug("Logged in as " + user)
-      HandleTlsMessage(log, self, xmlParser, prefix, tlsActor)(_)
+      HandleTlsMessage(log, self, xmlParser, prefix, tlsActor)(message)
     }
   }
 }

@@ -28,7 +28,7 @@ object SaslAuthenticateBehavior {
         tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
           new FailureWithDefinedCondition("malformed-request").toString))
     }
-    case _ => HandleTlsMessage(log, self, xmlParser, prefix, tlsActor)(_)
+    case message => HandleTlsMessage(log, self, xmlParser, prefix, tlsActor)(message)
   }
 
   /**

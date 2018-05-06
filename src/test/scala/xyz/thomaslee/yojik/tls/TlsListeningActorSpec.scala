@@ -40,16 +40,22 @@ class TlsListeningActorSpec extends TestKit(ActorSystem("TlsListeningActorSpec")
     def isOpen: Boolean = true
   }
 
-def removePaddingFromDecryptedBytes(bytes: ByteString): ByteString = {
-  @tailrec
-  def findLastNulIndex(index: Int): Int = index match {
-    case 0 => bytes.length
-    case index if bytes(index) != 0 => index + 1
-    case _ => findLastNulIndex(index - 1)
-  }
+  /**
+   * Returns the ByteString with trailing \u0000 characters removed.
+   *
+   * @param bytes the ByteString to remove padding from
+   * @return a ByteString equal to the original, minus trailing \u0000 characters
+   */
+  def removePaddingFromDecryptedBytes(bytes: ByteString): ByteString = {
+    @tailrec
+    def findLastNulIndex(index: Int): Int = index match {
+      case 0 => bytes.length
+      case index if bytes(index) != 0 => index + 1
+      case _ => findLastNulIndex(index - 1)
+    }
 
-  bytes.take(findLastNulIndex(bytes.length - 1))
-}
+    bytes.take(findLastNulIndex(bytes.length - 1))
+  }
 
   "TlsListeningActor" must {
     "reads all available data from the TlsChannel when Listen received" in {
