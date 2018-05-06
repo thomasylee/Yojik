@@ -10,8 +10,7 @@ import xyz.thomaslee.yojik.ConnectionActor
 import xyz.thomaslee.yojik.config.ConfigMap
 import xyz.thomaslee.yojik.tls.TlsActor
 import xyz.thomaslee.yojik.xml.{
-  BadFormatError, InvalidNamespaceError, StartTlsError, XmlParsingActor,
-  XmlResponse, XmlStreamError
+  BadFormatError, StartTlsError, XmlParsingActor, XmlResponse, XmlStreamError
 }
 
 object StartTlsBehavior {

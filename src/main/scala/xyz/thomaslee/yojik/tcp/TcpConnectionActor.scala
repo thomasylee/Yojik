@@ -1,7 +1,7 @@
 package xyz.thomaslee.yojik.tcp
 
 import akka.actor.{ Actor, ActorLogging, ActorRef, Props }
-import akka.io.Tcp.{ Abort, Close, PeerClosed, Received, Write }
+import akka.io.Tcp.{ Close, PeerClosed, Received, Write }
 import akka.util.ByteString
 import scala.util.Random
 

@@ -1,6 +1,6 @@
 package xyz.thomaslee.yojik
 
-import akka.actor.{ Actor, ActorLogging, ActorRef, DeadLetter }
+import akka.actor.{ Actor, ActorLogging, DeadLetter }
 import akka.util.ByteString
 
 import xyz.thomaslee.yojik.xmlstream.XmlStreamActor

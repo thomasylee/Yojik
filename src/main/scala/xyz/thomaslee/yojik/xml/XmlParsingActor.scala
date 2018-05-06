@@ -5,6 +5,7 @@ import java.io.InputStream
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.DurationInt
 import scala.io.BufferedSource
+import scala.language.postfixOps
 import scala.xml.MetaData
 import scala.xml.pull.{ EvElemEnd, EvElemStart, EvText, XMLEventReader }
 
@@ -96,7 +97,7 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
       context.become(parseXml(depth - 1))
 
       Option(depth, label) collect {
-        case (1, _) => {
+        case (1, _) | (2, "stream") => {
           log.debug("XML stream closed")
           context.parent ! XmlParsingActor.CloseStream(streamPrefix)
         }

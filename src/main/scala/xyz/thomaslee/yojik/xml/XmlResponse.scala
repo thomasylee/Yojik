@@ -57,7 +57,7 @@ object XmlResponse {
   val saslSuccess = "<success xmlns='urn:ietf:params:xml:ns:xmpp-sasl'/>"
 
   def resourceBindFeature(prefix: Option[String]): String =
-    s"""<${ insertPrefix(prefix) }:features>
+    s"""<${ insertPrefix(prefix) }features>
        |  <bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'/>
-       |</${ insertPrefix(prefix) }:features>""".stripMargin
+       |</${ insertPrefix(prefix) }features>""".stripMargin
 }

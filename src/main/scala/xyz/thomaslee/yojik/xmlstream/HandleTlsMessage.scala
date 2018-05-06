@@ -34,7 +34,7 @@ object HandleTlsMessage {
       self.stop
     }
     case error: XmlStreamError => self.handleStreamErrorWithTls(error, tlsActor)
-    case XmlParsingActor.CloseStream =>
+    case XmlParsingActor.CloseStream(_) =>
       tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
         XmlResponse.closeStream(prefix)))
   }

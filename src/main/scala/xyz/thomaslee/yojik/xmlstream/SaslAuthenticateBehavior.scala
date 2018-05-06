@@ -74,10 +74,10 @@ object SaslAuthenticateBehavior {
               tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
                 XmlResponse.saslSuccess))
 
-              self.context.become(BindResourceBehavior(
+              self.context.become(OpenStreamForBindResourceBehavior(
                 log,
                 self,
-                xmlParser,
+                self.recreateXmlParser(xmlParser),
                 prefix,
                 tlsActor,
                 username))
