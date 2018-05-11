@@ -7,6 +7,7 @@ import akka.util.ByteString
 import java.util.Base64
 import scala.util.{ Failure, Success, Try }
 
+import xyz.thomaslee.yojik.config.ConfigMap
 import xyz.thomaslee.yojik.tls.TlsActor
 import xyz.thomaslee.yojik.xml.{
   FailureWithDefinedCondition, XmlParsingActor, XmlResponse
@@ -70,7 +71,7 @@ object SaslAuthenticateBehavior {
               }
 
             // Use fake credentials until there's a database of some kind.
-            if (username == "test_username" && password == "test_password") {
+            if (ConfigMap.storageAdapter.validateCredentials(username, password, "PLAIN")) {
               tlsActor ! TlsActor.SendEncryptedToClient(ByteString(
                 XmlResponse.saslSuccess))
 
