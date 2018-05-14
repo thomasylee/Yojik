@@ -27,11 +27,9 @@ class MemoryAdapter(config: Config) extends StorageAdapter(config) {
   }
 
   def validateCredentials(username: String, password: String, hashAlgorithm: String): Boolean = hashAlgorithm match {
-    case "PLAIN" => {
-      users.get(username) match {
-        case Some(pswd: String) if pswd == password => true
-        case _ => false
-      }
+    case "PLAIN" => users.get(username) match {
+      case Some(pswd: String) if pswd == password => true
+      case _ => false
     }
   }
 }
