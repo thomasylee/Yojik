@@ -15,6 +15,7 @@ object XmlParsingActor {
   case class CloseStream(streamPrefix: Option[String])
   case class OpenStream(val prefix: Option[String], val namespaceUri: Option[String], val attributes: Map[String, String])
   case class StartTls(namespaceUri: Option[String])
+  case class TagReceived(tag: XmlTag)
 
   def props(inputStream: InputStream): Props =
     Props(classOf[XmlParsingActor], inputStream)
@@ -89,6 +90,8 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
       context.parent ! XmlParsingActor.CloseStream(streamPrefix)
       context.become(parseXml(None, 0))
     }
+    // TODO: Handle all closing stanza tags equally, so starttls and auth
+    // are no longer special cases.
     case (Some(stanza), EvElemEnd(_, label)) => (depth, label) match {
       case (2, "starttls") => {
         log.debug("<starttls/> received")
@@ -101,6 +104,10 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
           stanza.namespaceUri,
           Some(stanza.getStrings.mkString))
         context.become(parseXml(currentStanza, depth - 1))
+      }
+      case (2, _) => {
+        context.parent ! XmlParsingActor.TagReceived(stanza)
+        context.become(parseXml(None, depth - 1))
       }
       case _ => context.become(parseXml(currentStanza, depth - 1))
     }

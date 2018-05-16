@@ -3,7 +3,7 @@ package xyz.thomaslee.yojik.xml
 /**
  * XmlTag is a tag element in a parsed XML document or stream.
  */
-class XmlTag(val name: String, val prefix: Option[String], val namespaceUri: Option[String], val attributes: Map[String, String]) extends XmlEntity {
+case class XmlTag(val name: String, val prefix: Option[String], val namespaceUri: Option[String], val attributes: Map[String, String]) extends XmlEntity {
   private var contentsList: List[XmlEntity] = List()
   private var contentsMap: Map[String, List[XmlTag]] = Map()
   private var strings: List[XmlString] = List()
@@ -46,4 +46,27 @@ class XmlTag(val name: String, val prefix: Option[String], val namespaceUri: Opt
    * @return the strings in the tag
    */
   def getStrings: List[XmlString] = strings
+
+  /**
+   * Converts the tag to its XML representation.
+   *
+   * @return the string XML representation of the tag
+   */
+  override def toString: String = {
+    val prefixStr = prefix match {
+      case None => ""
+      case Some(pre) => s"$pre:"
+    }
+
+    val namespace = namespaceUri match {
+      case None => ""
+      case Some(ns) => " xmlns=\"" + ns + "\""
+    }
+
+    s"<$prefixStr$name$namespace" +
+      // Due to a Scala bug, escaping double quotes does not work with interpolation.
+      // https://issues.scala-lang.org/browse/SI-6476
+      attributes.toList.map { case (key, value) => s" $key=" + "\"" + value + "\"" }.mkString +
+      ">" + getContents.mkString + s"</$prefixStr$name>"
+  }
 }
