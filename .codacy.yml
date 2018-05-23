@@ -1,0 +1,8 @@
+---
+engines:
+  coverage:
+    enabled: true
+    exclude_paths:
+      - src/main/scala/xyz/thomaslee/yojik/DeadLetterActor.scala
+      - src/main/scala/xyz/thomaslee/yojik/Main.scala
+      - src/test/scala/xyz/thomaslee/yojik/*
