@@ -9,6 +9,8 @@ Definitions:
 
 ## Features
 
+Yojik aims to fulfill all/most of the MUST requirements in RFC-6120 and will eventually be extensible enough to support additional XEPs and other features.
+
 Currently, Yojik only supports the following features:
 * Receiving a TCP connection on port 5222
 * Opening an XML stream as defined in [XMPP Core](https://xmpp.org/rfcs/rfc6120.html)
