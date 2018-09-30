@@ -7,6 +7,13 @@ import java.nio.ByteBuffer
 import java.nio.channels.ByteChannel
 import scala.collection.mutable.Queue
 
+/**
+ * Handles the passing of raw bytes from the client to the server and vice
+ * versa by means of the tlsActor.
+ *
+ * @param tlsActor the ActorRef of the [[xyz.thomaslee.yojik.tls.TlsActor]]
+ *   managing the TLS session
+ */
 class RawTlsChannel(tlsActor: ActorRef) extends ByteChannel {
   lazy val toClientStream = new PipedOutputStream
   lazy val fromClientStream = new PipedInputStream
@@ -60,5 +67,10 @@ class RawTlsChannel(tlsActor: ActorRef) extends ByteChannel {
     bytes.length
   }
 
+  /**
+   * Stores the given buffer in the incomingBytes queue for later retrieval.
+   *
+   * @param buffer the [[java.nio.ByteBuffer]] to store
+   */
   def storeIncomingBytes(buffer: ByteBuffer): Unit = incomingBytes += buffer
 }

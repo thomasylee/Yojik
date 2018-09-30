@@ -13,17 +13,43 @@ import tlschannel.ServerTlsChannel
 import xyz.thomaslee.yojik.config.ConfigMap
 import xyz.thomaslee.yojik.xmlstream.XmlStreamActor
 
+/**
+ * Contains Akka messages that [[xyz.thomaslee.yojik.tls.TlsActor]] actors
+ * should be able to handle.
+ */
 object TlsActor {
+  /**
+   * Indicates that the client has sent some encrypted TLS message that needs
+   * to be decrypted and handled.
+   */
   case class ProcessMessage(bytes: ByteString)
+
+  /**
+   * Indicates that the bytes should be encrypted so they can be sent to the client.
+   */
   case class SendEncryptedToClient(bytes: ByteString)
+
+  /**
+   * Indicates that the bytes are encrypted and ready to be sent directly to
+   * the client.
+   */
   case class SendToClient(bytes: ByteString)
+
+  /**
+   * Indicates that the bytes are decrypted and ready to be sent directly to
+   * the [[xyz.thomaslee.yojik.xmlstream.XmlStreamActor]].
+   */
   case class SendToServer(bytes: ByteString)
+
+  /** Indicates that this actor should be stopped. */
   case object Stop
 }
 
+/** Wraps the XML stream in a TLS session. */
 class TlsActor extends Actor with ActorLogging {
   override def postStop: Unit = log.debug("TlsActor stopped")
 
+  /** Wraps the XML stream in a TLS session. */
   def receive: Receive = {
     val rawTlsChannel = new RawTlsChannel(self)
     val sslContext = createSslContext
@@ -39,6 +65,19 @@ class TlsActor extends Actor with ActorLogging {
     handleTlsMessages(rawTlsChannel, tlsChannel, context.parent, tlsListener)
   }
 
+  /**
+   * Handles Akka messages to wrap/unwrap XML with regards to the active TLS session.
+   *
+   * @param rawTlsChannel the channel that tracks encrypted/decrypted input/output
+   * @param tlsChannel the channel that handles the intricacies of TLS handshaking,
+   *   key exchange, encryption/decryption, etc.
+   * @param xmlStreamActor an ActorRef to the
+   *   [[xyz.thomaslee.yojik.xmlstream.XmlStreamActor]] that handles the decrypted
+   *   server side of the TLS session
+   * @param tlsListener an ActorRef to the
+   *   [[xyz.thomaslee.yojik.tls.TlsListeningActor]] that passes listens for
+   *   decrypted client-to-server messages on the TLS channel
+   */
   def handleTlsMessages(rawTlsChannel: RawTlsChannel, tlsChannel: ByteChannel, xmlStreamActor: ActorRef, tlsListener: ActorRef): Receive = {
     case TlsActor.ProcessMessage(bytes) => {
       log.debug("TLS bytes SentFromClient: " + bytes.length)
@@ -61,6 +100,11 @@ class TlsActor extends Actor with ActorLogging {
     }
   }
 
+  /**
+   * Returns the [[javax.net.ssl.SSLContext]] for the TLS session.
+   *
+   * @return the [[javax.net.ssl.SSLContext]] for the TLS session
+   */
   def createSslContext: SSLContext = {
     // Of course, non-development environments should load the password from
     // system variables or other means instead of storing it in the source code.

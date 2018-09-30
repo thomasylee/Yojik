@@ -5,14 +5,33 @@ import akka.util.ByteString
 
 import xyz.thomaslee.yojik.xmlstream.XmlStreamActor
 
+/**
+ * Contains constants to be used by instances of
+ * [[xyz.thomaslee.yojik.DeadLetterActor]].
+ */
 object DeadLetterActor {
+  /** The prefix for [[xyz.thomaslee.yojik.xmlstream.XmlStreamActor]] actors. */
   val XmlStreamActorPrefix = "xml-stream-actor-"
+
+  /** The prefix for [[xyz.thomaslee.yojik.tcp.TcpConnectionActor]] actors. */
   val TcpConnectionPrefix = "tcp-connection-actor-"
+
+  /** The name of the TCP server. */
   val TcpServerName = "tcp-server"
+
+  /** The prefix for [[xyz.thomaslee.yojik.xml.XmlParsingActor]] actors. */
   val XmlParsingActorPrefix = "xml-parsing-actor-"
 }
 
+/**
+ * Handles dead letters from actors that receive messages after they have
+ * been stopped.
+ */
 class DeadLetterActor extends Actor with ActorLogging {
+  /**
+   * Handles dead letters by ignoring the ones that are expected from various
+   * connection termination scenarios and logging the rest.
+   */
   def receive: Receive = {
     case DeadLetter(msg: ByteString, from, to) => {
       val fromName = from.path.name

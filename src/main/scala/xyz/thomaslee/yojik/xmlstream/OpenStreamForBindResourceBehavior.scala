@@ -12,7 +12,21 @@ import xyz.thomaslee.yojik.xml.{
   StanzaHandlingActor, XmlParsingActor, XmlResponse, XmlStreamError
 }
 
+/** Handles requests to open a new XML stream for resource binding. */
 object OpenStreamForBindResourceBehavior {
+  /**
+   * Handles the messages that opens a new XML stream for resource binding.
+   *
+   * @param log the [[akka.event.LoggingAdapter]] to use for logging
+   * @param self the [[xyz.thomaslee.yojik.xmlstream.XmlStreamActor]] instance
+   *   that is handling unauthenticated XML requests and responses
+   * @param xmlParser an ActorRef to the [[xyz.thomaslee.yojik.xml.XmlParsingActor]]
+   *   responsible for parsing XML
+   * @param prefix the stream prefix for the opening tag of the XML stream
+   * @param tlsActor an ActorRef to the [[xyz.thomaslee.yojik.tls.TlsActor]]
+   *   responsible for handling the TLS session
+   * @param user the authenticated username
+   */
   def apply(log: LoggingAdapter, self: XmlStreamActor, xmlParser: ActorRef, prefix: Option[String], tlsActor: ActorRef, user: String): Receive = {
     case request: XmlParsingActor.OpenStream =>
       self.validateOpenStreamRequest(request) match {

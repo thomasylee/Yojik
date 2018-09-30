@@ -1,7 +1,12 @@
 package xyz.thomaslee.yojik.xml
 
 /**
- * XmlTag is a tag element in a parsed XML document or stream.
+ * Represents an XML tag element in a parsed XML document or stream.
+ *
+ * @param name the name of the XML tag
+ * @param prefix the prefix for the XML tag, if there is one
+ * @param namespaceUri the namespace of the XML tag, if there is one
+ * @param attributes the attributes of the XML tag
  */
 case class XmlTag(val name: String, val prefix: Option[String], val namespaceUri: Option[String], val attributes: Map[String, String]) extends XmlEntity {
   private var contentsList: List[XmlEntity] = List()

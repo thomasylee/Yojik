@@ -8,6 +8,10 @@ import Tcp.{ Bind, Bound, CommandFailed, Connected, Register }
 
 import xyz.thomaslee.yojik.config.ConfigMap
 
+/**
+ * Creates new [[xyz.thomaslee.yojik.tcp.TcpConnectionActor]] actors when
+ * a new TCP connection is started.
+ */
 class TcpServer extends Actor with ActorLogging {
   implicit val system = context.system
 
@@ -15,6 +19,10 @@ class TcpServer extends Actor with ActorLogging {
 
   override def postStop: Unit = log.debug("TcpServer stopped")
 
+  /**
+   * Handles messages from TCP connections and
+   * [[xyz.thomaslee.yojik.tcp.TcpConnectionActor]] instances.
+   */
   def receive: Receive = {
     case bound @ Bound(_) => context.parent ! bound
     case CommandFailed(_: Bind) => context.stop(self)

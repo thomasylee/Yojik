@@ -12,7 +12,23 @@ import xyz.thomaslee.yojik.xml.{
   BadFormatError, XmlParsingActor, XmlResponse, XmlStreamError
 }
 
+/**
+ * Handles encryption and decryption of messages being passed through a TLS session.
+ */
 object HandleTlsMessage {
+  /**
+   * Handles the messages that contain data to encrypt or decrypt during
+   * a TLS session.
+   *
+   * @param log the [[akka.event.LoggingAdapter]] to use for logging
+   * @param self the [[xyz.thomaslee.yojik.xmlstream.XmlStreamActor]] instance
+   *   that is handling unauthenticated XML requests and responses
+   * @param xmlParser an ActorRef to the [[xyz.thomaslee.yojik.xml.XmlParsingActor]]
+   *   responsible for parsing XML
+   * @param prefix the stream prefix for the opening tag of the XML stream
+   * @param tlsActor an ActorRef to the [[xyz.thomaslee.yojik.tls.TlsActor]]
+   *   responsible for handling the TLS session
+   */
   def apply(log: LoggingAdapter, self: XmlStreamActor, xmlParser: ActorRef, prefix: Option[String], tlsActor: ActorRef): Receive = {
     case XmlStreamActor.ProcessMessage(message) =>
       tlsActor ! TlsActor.ProcessMessage(message)

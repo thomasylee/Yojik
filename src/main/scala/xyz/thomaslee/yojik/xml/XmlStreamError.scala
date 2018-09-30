@@ -1,9 +1,17 @@
 package xyz.thomaslee.yojik.xml
 
 /**
- * XmlStreamError is the parent class of all XMPP stream errors.
+ * The parent class for all XML stream error subclasses.
+ *
+ * @todo Replace [[xyz.thomaslee.yojik.xml.XmlStreamError]] and its subclasses
+ *   with [[xyz.thomaslee.yojik.xml.XmlTag]] instances.
  */
 case class XmlStreamError(val prefix: Option[String], val errorType: String, val message: Option[String]) {
+  /**
+   * Returns an XML String representation of this stream error.
+   *
+   * @return a String representation of this error in XML format
+   */
   override def toString: String = {
     val visiblePrefix = prefix match {
       case Some(pre) => pre + ":"
@@ -17,27 +25,33 @@ case class XmlStreamError(val prefix: Option[String], val errorType: String, val
 }
 
 /**
- * BadFormatError represents <bad-format/> XMPP errors.
+ * Represents <bad-format/> XMPP errors.
  */
 class BadFormatError(prefix: Option[String], message: Option[String])
   extends XmlStreamError(prefix, "bad-format", message)
 
 /**
- * ServiceUnavailableError represents <service-unavailable/> XMPP errors.
+ * Represents <service-unavailable/> XMPP errors.
  */
 class ServiceUnavailableError(prefix: Option[String], message: Option[String])
   extends XmlStreamError(prefix, "service-unavailable", message)
 
 /**
- * InvalidNamespaceError represents <invalid-namespace/> XMPP errors.
+ * Represents <invalid-namespace/> XMPP errors.
  */
 class InvalidNamespaceError(prefix: Option[String], message: Option[String])
   extends XmlStreamError(prefix, "invalid-namespace", message)
 
+/** Represents errors when initiating StartTLS. */
 class StartTlsError {
   override def toString: String = "<failure xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>"
 }
 
+/**
+ * Represents a failure with inner tags or text content.
+ *
+ * @param condition the content to include in the <failure/> tag.
+ */
 class FailureWithDefinedCondition(condition: String) {
   override def toString: String =
     s"""<failure xmlns='urn:ietf:params:xml:ns:xmpp-sasl'>

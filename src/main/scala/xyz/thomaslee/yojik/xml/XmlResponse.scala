@@ -1,6 +1,19 @@
 package xyz.thomaslee.yojik.xml
 
+/**
+ * Provides methods for generating XML responses.
+ *
+ * @todo Replace this object with [[xyz.thomaslee.yojik.xml.XmlTag]] instances.
+ */
 object XmlResponse {
+  /**
+   * Returns the given XML tag prefix in a format that can be inserted directly
+   * in front of the tag name.
+   *
+   * @param prefix the <stream/> tag prefix, or None if no prefix is used
+   * @return a String that contains the prefix followed by a colon if there is
+   *   a prefix, or else an empty String
+   */
   def insertPrefix(prefix: Option[String]): String = prefix match {
     case Some(pre) => pre + ":"
     case None => ""
@@ -35,6 +48,12 @@ object XmlResponse {
   def closeStream(prefix: Option[String]): String =
     s"""</${ insertPrefix(prefix) }stream>"""
 
+  /**
+   * Returns the XML tag advertising the StartTLS feature.
+   *
+   * @param prefix the <stream/> tag prefix, or None if no prefix is used
+   * @return a String representation of the StartTLS feature
+   */
   def startTlsStreamFeature(prefix: Option[String]): String =
     s"""<${ insertPrefix(prefix) }features>
        |  <starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'>
@@ -42,8 +61,18 @@ object XmlResponse {
        |  </starttls>
        |</${ insertPrefix(prefix) }features>""".stripMargin
 
+  /**
+   * The XML tag indicating that the client should proceed with TLS negotiations.
+   */
   val proceedWithTls = "<proceed xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>"
 
+  /**
+   * Returns the XML tag advertising the SASL authentication feature.
+   *
+   * @param prefix the <stream/> tag prefix, or None if no prefix is used
+   * @param includeExternal true if the EXTERNAL mechanism should be advertised
+   * @return a String representation of the SASL authentication feature
+   */
   def saslStreamFeature(prefix: Option[String], includeExternal: Boolean = false): String =
     s"""<${ insertPrefix(prefix) }features>
        |  <mechanisms xmlns='urn:ietf:params:xml:ns:xmpp-sasl'>
@@ -54,8 +83,15 @@ object XmlResponse {
        |  </mechanisms>
        |</${ insertPrefix(prefix) }features>""".stripMargin
 
+  /** The XML tag indicating that SASL authentication succeeded. */
   val saslSuccess = "<success xmlns='urn:ietf:params:xml:ns:xmpp-sasl'/>"
 
+  /**
+   * Returns the XML tag advertising the resource binding feature.
+   *
+   * @param prefix the <stream/> tag prefix, or None if no prefix is used
+   * @return a String representation of the resource binding feature
+   */
   def resourceBindFeature(prefix: Option[String]): String =
     s"""<${ insertPrefix(prefix) }features>
        |  <bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'/>
