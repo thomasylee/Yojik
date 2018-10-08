@@ -1,6 +1,6 @@
 package xyz.thomaslee.yojik.xml
 
-import akka.actor.{ Actor, ActorLogging, Props }
+import akka.actor.{ Actor, ActorLogging, ActorRef, Props, Terminated }
 import java.io.InputStream
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.DurationInt
@@ -15,6 +15,9 @@ import scala.xml.pull.{ EvElemEnd, EvElemStart, EvText, XMLEventReader }
  * [[xyz.thomaslee.yojik.xml.XmlParsingActor]].
  */
 object XmlParsingActor {
+  /** Indicates that the parsing actor's owner should be updated. */
+  case class Register(owner: ActorRef)
+
   /** Indicates that the actor should start parsing XML from its InputStream. */
   case object Parse
 
@@ -37,25 +40,32 @@ object XmlParsingActor {
    * Returns [[akka.actor.Props]] to use to create a
    * [[xyz.thomaslee.yojik.xml.XmlParsingActor]].
    *
+   * @param owner an [[akka.actor.ActorRef]] to the actor to which this actor
+   *   should respond
    * @param inputStream the [[java.io.InputStream]] from which XML is received
    * @return a new [[akka.actor.Props]] instance to use to create a
    *   [[xyz.thomaslee.yojik.xml.XmlParsingActor]]
    */
-  def props(inputStream: InputStream): Props =
-    Props(classOf[XmlParsingActor], inputStream)
+  def props(owner: ActorRef, inputStream: InputStream): Props =
+    Props(classOf[XmlParsingActor], owner, inputStream)
 }
 
 /**
- * Parses XML received from a [[java.io.InputStream]] and sends its actor parent
+ * Parses XML received from a [[java.io.InputStream]] and sends its owner
  * messages in response to the received XML tags.
  *
+ * @param owner an [[akka.actor.ActorRef]] to the actor to which this actor
+ *   should respond
  * @param inputStream the [[java.io.InputStream]] to listen to for incoming XML
  */
-class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging {
+class XmlParsingActor(var owner: ActorRef, inputStream: InputStream)
+    extends Actor with ActorLogging {
   /** The event-based XML parser that reads from the [[java.io.InputStream]]. */
   val xmlReader: XMLEventReader = new XMLEventReader(new BufferedSource(inputStream))
 
   var streamPrefix: Option[String] = None
+
+  override def preStart: Unit = context.watch(owner)
 
   /**
    * Closes the [[scala.xml.pull.XmlEventReader]] after stopping to help save
@@ -80,6 +90,11 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
    * @param depth the depth of nesting in the XML document
    */
   def parseXml(currentStanza: Option[XmlTag], depth: Int): Receive = {
+    case XmlParsingActor.Register(newOwner) => {
+      context.unwatch(owner)
+      context.watch(newOwner)
+      owner = newOwner
+    }
     case XmlParsingActor.Parse =>
       if (xmlReader.available) {
         Some(xmlReader.next) collect {
@@ -95,6 +110,7 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
         // Try again since parsing XML from the InputStream may take some time.
         context.system.scheduler.scheduleOnce(50 millis, self, XmlParsingActor.Parse)
       }
+    case Terminated(actor) if actor == owner => context.stop(self)
   }
 
   /**
@@ -129,13 +145,13 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
   }
 
   /**
-   * Sends a message to this actor's parent indicating that an XML stream has
+   * Sends a message to this actor's owner indicating that an XML stream has
    * been opened.
    *
-   * @param xmlStreamTag the tag details to send to this actor's parent
+   * @param xmlStreamTag the tag details to send to this actor's owner
    */
   def notifyXmlStreamStart(xmlStreamTag: XmlTag): Unit = {
-    context.parent ! XmlParsingActor.OpenStream(
+    owner ! XmlParsingActor.OpenStream(
       xmlStreamTag.prefix,
       xmlStreamTag.namespaceUri,
       xmlStreamTag.attributes
@@ -152,7 +168,7 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
   def handleEndTag(currentStanza: Option[XmlTag], depth: Int, event: EvElemEnd): Unit = (currentStanza, event) match {
     case (None, _) | (Some(_), EvElemEnd(_, "stream")) if depth <= 1 => {
       log.debug("XML stream closed")
-      context.parent ! XmlParsingActor.CloseStream(streamPrefix)
+      owner ! XmlParsingActor.CloseStream(streamPrefix)
       context.become(parseXml(None, 0))
     }
     // TODO: Handle all closing stanza tags equally, so starttls and auth
@@ -160,18 +176,18 @@ class XmlParsingActor(inputStream: InputStream) extends Actor with ActorLogging 
     case (Some(stanza), EvElemEnd(_, label)) => (depth, label) match {
       case (2, "starttls") => {
         log.debug("<starttls/> received")
-        context.parent ! XmlParsingActor.StartTls(stanza.namespaceUri)
+        owner ! XmlParsingActor.StartTls(stanza.namespaceUri)
         context.become(parseXml(currentStanza, depth - 1))
       }
       case (2, "auth") => {
-        context.parent ! XmlParsingActor.AuthenticateWithSasl(
+        owner ! XmlParsingActor.AuthenticateWithSasl(
           stanza.attributes.get("mechanism"),
           stanza.namespaceUri,
           Some(stanza.getStrings.mkString))
         context.become(parseXml(currentStanza, depth - 1))
       }
       case (2, _) => {
-        context.parent ! XmlParsingActor.TagReceived(stanza)
+        owner ! XmlParsingActor.TagReceived(stanza)
         context.become(parseXml(None, depth - 1))
       }
       case _ => context.become(parseXml(currentStanza, depth - 1))

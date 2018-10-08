@@ -1,14 +1,12 @@
 package xyz.thomaslee.yojik.xmlstream
 
-import akka.actor.{ ActorRef, Props }
+import akka.actor.ActorRef
 import akka.actor.Actor.Receive
 import akka.event.LoggingAdapter
 import akka.util.ByteString
-import scala.util.{ Failure, Random, Success, Try }
+import scala.util.{ Failure, Success, Try }
 
 import xyz.thomaslee.yojik.ConnectionActor
-import xyz.thomaslee.yojik.config.ConfigMap
-import xyz.thomaslee.yojik.tls.TlsActor
 import xyz.thomaslee.yojik.xml.{
   BadFormatError, StartTlsError, XmlParsingActor, XmlResponse, XmlStreamError
 }
@@ -25,14 +23,14 @@ object StartTlsBehavior {
    * Handles the messages that attempt to start TLS negotiations with StartTLS.
    *
    * @param log the [[akka.event.LoggingAdapter]] to use for logging
-   * @param self the [[xyz.thomaslee.yojik.xmlstream.XmlStreamActor]] instance
-   *   that is handling unauthenticated XML requests and responses
+   * @param self the [[xyz.thomaslee.yojik.xmlstream.XmlStreamManaging]] actor
+   *   instance that is handling unauthenticated XML requests and responses
    * @param xmlParser an ActorRef to the [[xyz.thomaslee.yojik.xml.XmlParsingActor]]
    *   responsible for parsing XML
    * @param prefix the stream prefix for the opening tag of the XML stream
    */
-  def apply(log: LoggingAdapter, self: XmlStreamActor, xmlParser: ActorRef, prefix: Option[String]): Receive = {
-    case XmlStreamActor.ProcessMessage(message) => {
+  def apply(log: LoggingAdapter, self: XmlStreamManaging, xmlParser: ActorRef, prefix: Option[String]): Receive = {
+    case XmlStreamManaging.ProcessMessage(message) => {
       log.debug("Received: " + message.utf8String)
       Try(self.xmlOutputStream.write(message.toArray[Byte])) match {
         case Success(_) => xmlParser ! XmlParsingActor.Parse
@@ -47,32 +45,29 @@ object StartTlsBehavior {
     case tls: XmlParsingActor.StartTls => validateStartTls(tls) match {
       case Some(error: StartTlsError) => {
         log.warning("StartTls failure")
-        self.tcpConnectionActor ! ConnectionActor.ReplyToSender(ByteString(
+        self.connectionActor ! ConnectionActor.ReplyToSender(ByteString(
           error.toString + "\n" + XmlResponse.closeStream(prefix)))
         self.stop
       }
-      case None => {
-        self.tcpConnectionActor ! ConnectionActor.ReplyToSender(ByteString(
-          XmlResponse.proceedWithTls))
-
-        self.context.become(NegotiateTlsBehavior(
-          log,
-          self,
-          self.recreateXmlParser(xmlParser),
-          prefix,
-          self.context.actorOf(
-            Props(classOf[TlsActor]),
-            "tls-actor-" + Random.alphanumeric.take(
-              ConfigMap.randomCharsInActorNames).mkString)))
-      }
+      case None => self.connectionActor ! ConnectionActor.CreateTlsActor(self.self)
+    }
+    case ConnectionActor.TlsActorCreated(tlsActor) => {
+      self.connectionActor ! ConnectionActor.ReplyToSender(ByteString(
+        XmlResponse.proceedWithTls))
+      self.context.become(NegotiateTlsBehavior(
+        log,
+        self,
+        self.recreateXmlParser(xmlParser),
+        prefix,
+        tlsActor))
     }
     case XmlParsingActor.CloseStream(streamPrefix) => {
-      self.tcpConnectionActor ! ConnectionActor.ReplyToSender(ByteString(
+      self.connectionActor ! ConnectionActor.ReplyToSender(ByteString(
         XmlResponse.closeStream(streamPrefix)))
 
       self.stop
     }
-    case XmlStreamActor.Stop => self.stop
+    case XmlStreamManaging.Stop => self.stop
   }
 
   /**

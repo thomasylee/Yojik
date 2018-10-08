@@ -12,6 +12,7 @@ object ConfigMap {
 
   val randomCharsInActorNames = config.getInt("yojik.random-chars-in-actor-names")
   val keyStore = config.getString("yojik.server.key-store")
+  val domain = config.getString("yojik.server.domain")
   val serverPort = config.getInt("yojik.server.port")
 
   /**

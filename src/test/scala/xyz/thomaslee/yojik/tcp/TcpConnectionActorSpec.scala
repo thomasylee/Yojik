@@ -9,7 +9,7 @@ import scala.language.postfixOps
 
 import xyz.thomaslee.yojik.ConnectionActor
 import xyz.thomaslee.yojik.tcp.TcpConnectionActor
-import xyz.thomaslee.yojik.xmlstream.XmlStreamActor
+import xyz.thomaslee.yojik.xmlstream.XmlStreamManaging
 
 class TcpConnectionActorSpec extends TestKit(ActorSystem("TcpConnectionActorSpec"))
     with MockFactory
@@ -27,7 +27,7 @@ class TcpConnectionActorSpec extends TestKit(ActorSystem("TcpConnectionActorSpec
       val connection = TestProbe("Tcp")
       val xmlStreamActor = TestProbe("XmlStreamActor")
       val connActor = system.actorOf(Props(new TcpConnectionActor(connection.ref) {
-        override def receive: Receive = unauthenticatedConnection(xmlStreamActor.ref)
+        override def receive: Receive = handleConnection(xmlStreamActor.ref, None)
       }))
 
       val deathWatcher = TestProbe()
@@ -36,7 +36,7 @@ class TcpConnectionActorSpec extends TestKit(ActorSystem("TcpConnectionActorSpec
       connActor ! ConnectionActor.Disconnect
 
       connection.expectMsg(200 millis, Tcp.Close)
-      xmlStreamActor.expectMsg(200 millis, XmlStreamActor.Stop)
+      xmlStreamActor.expectMsg(200 millis, XmlStreamManaging.Stop)
       deathWatcher.expectTerminated(connActor)
     }
 
@@ -44,7 +44,7 @@ class TcpConnectionActorSpec extends TestKit(ActorSystem("TcpConnectionActorSpec
       val connection = TestProbe("Tcp")
       val xmlStreamActor = TestProbe("XmlStreamActor")
       val connActor = system.actorOf(Props(new TcpConnectionActor(connection.ref) {
-        override def receive: Receive = unauthenticatedConnection(xmlStreamActor.ref)
+        override def receive: Receive = handleConnection(xmlStreamActor.ref, None)
       }))
 
       val deathWatcher = TestProbe()
@@ -52,7 +52,7 @@ class TcpConnectionActorSpec extends TestKit(ActorSystem("TcpConnectionActorSpec
 
       connActor ! Tcp.PeerClosed
 
-      xmlStreamActor.expectMsg(200 millis, XmlStreamActor.Stop)
+      xmlStreamActor.expectMsg(200 millis, XmlStreamManaging.Stop)
       deathWatcher.expectTerminated(connActor)
     }
 
@@ -60,13 +60,13 @@ class TcpConnectionActorSpec extends TestKit(ActorSystem("TcpConnectionActorSpec
       val connection = TestProbe("Tcp")
       val xmlStreamActor = TestProbe("XmlStreamActor")
       val connActor = system.actorOf(Props(new TcpConnectionActor(connection.ref) {
-        override def receive: Receive = unauthenticatedConnection(xmlStreamActor.ref)
+        override def receive: Receive = handleConnection(xmlStreamActor.ref, None)
       }))
 
       val data = ByteString("UTF-8 message: ёжик")
       connActor ! Tcp.Received(data)
 
-      xmlStreamActor.expectMsg(200 millis, XmlStreamActor.ProcessMessage(data))
+      xmlStreamActor.expectMsg(200 millis, XmlStreamManaging.ProcessMessage(data))
     }
 
     "send ReplyToSender messages to the TCP sender" in {
@@ -75,7 +75,7 @@ class TcpConnectionActorSpec extends TestKit(ActorSystem("TcpConnectionActorSpec
       val tcpSender = TestProbe("TcpSender")
       val connActor = system.actorOf(Props(new TcpConnectionActor(connection.ref) {
         mostRecentSender = Some(tcpSender.ref)
-        override def receive: Receive = unauthenticatedConnection(xmlStreamActor.ref)
+        override def receive: Receive = handleConnection(xmlStreamActor.ref, None)
       }))
 
       val data = ByteString("UTF-8 message: ёжик")

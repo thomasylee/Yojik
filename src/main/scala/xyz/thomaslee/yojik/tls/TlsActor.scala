@@ -1,6 +1,6 @@
 package xyz.thomaslee.yojik.tls
 
-import akka.actor.{ Actor, ActorLogging, ActorRef }
+import akka.actor.{ Actor, ActorLogging, ActorRef, Props }
 import akka.util.ByteString
 import java.io.FileInputStream
 import java.nio.ByteBuffer
@@ -11,11 +11,12 @@ import scala.util.{ Random, Try }
 import tlschannel.ServerTlsChannel
 
 import xyz.thomaslee.yojik.config.ConfigMap
-import xyz.thomaslee.yojik.xmlstream.XmlStreamActor
+import xyz.thomaslee.yojik.xmlstream.XmlStreamManaging
 
 /**
  * Contains Akka messages that [[xyz.thomaslee.yojik.tls.TlsActor]] actors
- * should be able to handle.
+ * should be able to handle, and also acts as a [[xyz.thomaslee.yojik.tls.TlsActor]]
+ * factory.
  */
 object TlsActor {
   /**
@@ -37,16 +38,28 @@ object TlsActor {
 
   /**
    * Indicates that the bytes are decrypted and ready to be sent directly to
-   * the [[xyz.thomaslee.yojik.xmlstream.XmlStreamActor]].
+   * the [[xyz.thomaslee.yojik.xmlstream.XmlStreamManaging]] actor.
    */
   case class SendToServer(bytes: ByteString)
 
   /** Indicates that this actor should be stopped. */
   case object Stop
+
+  /**
+   * Returns [[akka.actor.Props]] to use to create a
+   * [[xyz.thomaslee.yojik.tls.TslActor]].
+   *
+   * @param xmlStreamManager an ActorRef to an actor with the
+   *   [[xyz.thomaslee.yojik.xmlstream.XmlStreamManaging]] trait
+   * @return a new [[akka.actor.Props]] instance to use to create a
+   *   [[xyz.thomaslee.yojik.tls.TlsActor]].
+   */
+  def props(xmlStreamManager: ActorRef): Props =
+    Props(classOf[TlsActor], xmlStreamManager)
 }
 
 /** Wraps the XML stream in a TLS session. */
-class TlsActor extends Actor with ActorLogging {
+class TlsActor(initXmlStreamManager: ActorRef) extends Actor with ActorLogging {
   override def postStop: Unit = log.debug("TlsActor stopped")
 
   /** Wraps the XML stream in a TLS session. */
@@ -62,7 +75,7 @@ class TlsActor extends Actor with ActorLogging {
       "xml-listening-actor-" + Random.alphanumeric.take(
         ConfigMap.randomCharsInActorNames).mkString)
 
-    handleTlsMessages(rawTlsChannel, tlsChannel, context.parent, tlsListener)
+    handleTlsMessages(rawTlsChannel, tlsChannel, initXmlStreamManager, tlsListener)
   }
 
   /**
@@ -71,28 +84,31 @@ class TlsActor extends Actor with ActorLogging {
    * @param rawTlsChannel the channel that tracks encrypted/decrypted input/output
    * @param tlsChannel the channel that handles the intricacies of TLS handshaking,
    *   key exchange, encryption/decryption, etc.
-   * @param xmlStreamActor an ActorRef to the
-   *   [[xyz.thomaslee.yojik.xmlstream.XmlStreamActor]] that handles the decrypted
-   *   server side of the TLS session
+   * @param xmlStreamManager an ActorRef to the
+   *   [[xyz.thomaslee.yojik.xmlstream.XmlStreamManaging]] actor that handles the
+   *   decrypted server side of the TLS session
    * @param tlsListener an ActorRef to the
    *   [[xyz.thomaslee.yojik.tls.TlsListeningActor]] that passes listens for
    *   decrypted client-to-server messages on the TLS channel
    */
-  def handleTlsMessages(rawTlsChannel: RawTlsChannel, tlsChannel: ByteChannel, xmlStreamActor: ActorRef, tlsListener: ActorRef): Receive = {
+  def handleTlsMessages(rawTlsChannel: RawTlsChannel, tlsChannel: ByteChannel, xmlStreamManager: ActorRef, tlsListener: ActorRef): Receive = {
     case TlsActor.ProcessMessage(bytes) => {
       log.debug("TLS bytes SentFromClient: " + bytes.length)
       rawTlsChannel.storeIncomingBytes(ByteBuffer.wrap(bytes.toArray[Byte]))
       tlsListener ! TlsListeningActor.Listen
     }
     case TlsActor.SendToServer(bytes) =>
-      xmlStreamActor ! XmlStreamActor.ProcessDecryptedMessage(bytes)
+      xmlStreamManager ! XmlStreamManaging.ProcessDecryptedMessage(bytes)
     case TlsActor.SendToClient(bytes) => {
       log.debug("TLS bytes SentToClient: " + bytes.length)
-      xmlStreamActor ! XmlStreamActor.PassToClient(bytes)
+      xmlStreamManager ! XmlStreamManaging.PassToClient(bytes)
     }
     case TlsActor.SendEncryptedToClient(bytes) => {
       tlsChannel.write(ByteBuffer.wrap(bytes.toArray[Byte]))
     }
+    case XmlStreamManaging.XmlStreamManagerChanged(newXmlStreamManager) =>
+      context.become(handleTlsMessages(
+        rawTlsChannel, tlsChannel, newXmlStreamManager, tlsListener))
     case TlsActor.Stop => {
       Try(tlsChannel.close)
       Try(rawTlsChannel.close)

@@ -21,15 +21,15 @@ object SaslAuthenticateBehavior {
    * Handles the messages that attempt to authenticate via SASL.
    *
    * @param log the [[akka.event.LoggingAdapter]] to use for logging
-   * @param self the [[xyz.thomaslee.yojik.xmlstream.XmlStreamActor]] instance
-   *   that is handling unauthenticated XML requests and responses
+   * @param self the [[xyz.thomaslee.yojik.xmlstream.XmlStreamManaging]] actor
+   *   instance that is handling unauthenticated XML requests and responses
    * @param xmlParser an ActorRef to the [[xyz.thomaslee.yojik.xml.XmlParsingActor]]
    *   responsible for parsing XML
    * @param prefix the stream prefix for the opening tag of the XML stream
    * @param tlsActor an ActorRef to the [[xyz.thomaslee.yojik.tls.TlsActor]]
    *   responsible for handling the TLS session
    */
-  def apply(log: LoggingAdapter, self: XmlStreamActor, xmlParser: ActorRef, prefix: Option[String], tlsActor: ActorRef): Receive = {
+  def apply(log: LoggingAdapter, self: XmlStreamManaging, xmlParser: ActorRef, prefix: Option[String], tlsActor: ActorRef): Receive = {
     case XmlParsingActor.AuthenticateWithSasl(mechanism, namespace, base64Value) => namespace match {
       case Some(ns) if ns == ValidSaslNamespace => mechanism match {
         case Some("PLAIN") =>
@@ -49,14 +49,14 @@ object SaslAuthenticateBehavior {
    * Authenticate with SASL with the PLAIN mechanism.
    *
    * @param log the LoggingAdapter to use for logging
-   * @param self the XmlStreamActor using this behavior
+   * @param self the XmlStreamManaging actor using this behavior
    * @param xmlParser the XmlParsingActor to parse the XML stream elements
    * @param prefix the XML stream namespace prefix
    * @param tlsActor the TlsActor for encrypting the connection
    * @param base64Value the base64 value passed in the auth element
    */
   def authenticateWithSaslPlain(log: LoggingAdapter,
-                                self: XmlStreamActor,
+                                self: XmlStreamManaging,
                                 xmlParser: ActorRef,
                                 prefix: Option[String],
                                 tlsActor: ActorRef,

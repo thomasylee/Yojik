@@ -7,7 +7,8 @@ import scala.util.Random
 
 import xyz.thomaslee.yojik.ConnectionActor
 import xyz.thomaslee.yojik.config.ConfigMap
-import xyz.thomaslee.yojik.xmlstream.XmlStreamActor
+import xyz.thomaslee.yojik.tls.TlsActor
+import xyz.thomaslee.yojik.xmlstream.{ XmlStreamActor, XmlStreamManaging }
 
 /**
  * Factory for [[akka.actor.Props]] used to create a
@@ -21,7 +22,7 @@ object TcpConnectionActor {
    * @param connection an ActorRef to an actor that responds to
    *   [[xyz.thomaslee.yojik.ConnectionActor]] messages
    * @return a new [[akka.actor.Props]] instance to use to create a
-   *   [[xyz.thomaslee.yojik.Tcp.ConnectionActor]]
+   *   [[xyz.thomaslee.yojik.tcp.TcpConnectionActor]]
    */
   def props(connection: ActorRef): Props =
     Props(classOf[TcpConnectionActor], connection)
@@ -43,28 +44,37 @@ class TcpConnectionActor(connection: ActorRef) extends Actor with ActorLogging {
    * Receives Akka messages with different behaviors, starting with the
    * unauthenticatedConnection behavior.
    */
-  def receive: Receive = unauthenticatedConnection(
+  def receive: Receive = handleConnection(
     context.actorOf(
       Props(classOf[XmlStreamActor]),
       "xml-stream-actor-" + Random.alphanumeric.take(
-        ConfigMap.randomCharsInActorNames).mkString))
+        ConfigMap.randomCharsInActorNames).mkString),
+    None)
 
   /**
-   * Handles TCP connections for XML streams that have not yet been authenticated
-   * and thus cannot be mapped to an actor by JID.
+   * Handles active TCP connections.
    *
-   * @param xmlStreamActor the ActorRef to handle the XML stream
+   * @param xmlStreamManager the actor that is currently managing the XML stream
+   * @param tlsActor the actor handling TLS details, if there is one
    */
-  def unauthenticatedConnection(xmlStreamActor: ActorRef): Receive = {
+  def handleConnection(xmlStreamManager: ActorRef, tlsActor: Option[ActorRef]): Receive = {
+    case XmlStreamManaging.XmlStreamManagerChanged(newXmlStreamManager) => {
+      tlsActor match {
+        case Some(foundActor) =>
+          foundActor ! XmlStreamManaging.XmlStreamManagerChanged(newXmlStreamManager)
+        case None => {}
+      }
+      context.become(handleConnection(newXmlStreamManager, tlsActor))
+    }
     case ConnectionActor.Disconnect => {
       log.debug("TCP connection disconnected")
       connection ! Close
-      xmlStreamActor ! XmlStreamActor.Stop
+      xmlStreamManager ! XmlStreamManaging.Stop
       context.stop(self)
     }
     case Received(data: ByteString) => {
       mostRecentSender = Some(sender)
-      xmlStreamActor ! XmlStreamActor.ProcessMessage(data)
+      xmlStreamManager ! XmlStreamManaging.ProcessMessage(data)
     }
     case ConnectionActor.ReplyToSender(message) => {
       mostRecentSender match {
@@ -74,8 +84,19 @@ class TcpConnectionActor(connection: ActorRef) extends Actor with ActorLogging {
     }
     case PeerClosed => {
       log.debug("TCP connection peer closed")
-      xmlStreamActor ! XmlStreamActor.Stop
+      xmlStreamManager ! XmlStreamManaging.Stop
       context.stop(self)
+    }
+    case ConnectionActor.CreateTlsActor(respondTo) => tlsActor match {
+      case Some(foundActor) => sender ! ConnectionActor.TlsActorCreated(foundActor)
+      case None => {
+        val newTlsActor = context.actorOf(
+          TlsActor.props(xmlStreamManager),
+          "tls-actor-" + Random.alphanumeric.take(
+            ConfigMap.randomCharsInActorNames).mkString)
+        respondTo ! ConnectionActor.TlsActorCreated(newTlsActor)
+        context.become(handleConnection(xmlStreamManager, Some(newTlsActor)))
+      }
     }
   }
 }

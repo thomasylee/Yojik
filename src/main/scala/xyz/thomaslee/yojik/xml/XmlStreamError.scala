@@ -37,7 +37,13 @@ class ServiceUnavailableError(prefix: Option[String], message: Option[String])
   extends XmlStreamError(prefix, "service-unavailable", message)
 
 /**
- * Represents <invalid-namespace/> XMPP errors.
+ * InvalidXmlError represents <invalid-xml/> XMPP errors.
+ */
+class InvalidXmlError(prefix: Option[String], message: Option[String])
+  extends XmlStreamError(prefix, "invalid-xml", message)
+
+/**
+ * InvalidNamespaceError represents <invalid-namespace/> XMPP errors.
  */
 class InvalidNamespaceError(prefix: Option[String], message: Option[String])
   extends XmlStreamError(prefix, "invalid-namespace", message)
@@ -57,4 +63,14 @@ class FailureWithDefinedCondition(condition: String) {
     s"""<failure xmlns='urn:ietf:params:xml:ns:xmpp-sasl'>
        |  <${ condition }/>
        |</failure>""".stripMargin
+}
+
+/** Represents a <bad-request/> XMPP error. */
+class BadRequestError(iqId: String) extends XmlStreamError(None, "bad-request", None) {
+  override def toString: String =
+    s"""<iq id='${ iqId }' type='error'>
+       |<error type='modify'>
+       |<bad-request xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/>
+       |</error>
+       |</iq>""".stripMargin
 }

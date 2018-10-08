@@ -1,5 +1,5 @@
 import akka.actor.{ ActorSystem, Props }
-import akka.testkit.{ ImplicitSender, TestActorRef, TestKit, TestProbe }
+import akka.testkit.{ ImplicitSender, TestActorRef, TestActors, TestKit, TestProbe }
 import akka.util.ByteString
 import javax.net.ssl.SSLContext
 import java.nio.ByteBuffer
@@ -10,7 +10,7 @@ import scala.concurrent.duration.DurationInt
 import scala.language.postfixOps
 
 import xyz.thomaslee.yojik.tls.{ TlsActor, TlsListeningActor, RawTlsChannel }
-import xyz.thomaslee.yojik.xmlstream.XmlStreamActor
+import xyz.thomaslee.yojik.xmlstream.XmlStreamManaging
 
 class TlsActorSpec extends TestKit(ActorSystem("TlsActorSpec"))
     with MockFactory
@@ -29,7 +29,7 @@ class TlsActorSpec extends TestKit(ActorSystem("TlsActorSpec"))
       val tlsChannel = stub[ByteChannel]
       val xmlStreamActor = TestProbe("XmlStreamActor")
       val tlsListener = TestProbe("TlsListeningActor")
-      val tlsActor = system.actorOf(Props(new TlsActor {
+      val tlsActor = system.actorOf(Props(new TlsActor(xmlStreamActor.ref) {
         override def receive: Receive = handleTlsMessages(
           rawTlsChannel, tlsChannel, xmlStreamActor.ref, tlsListener.ref)
       }))
@@ -49,7 +49,7 @@ class TlsActorSpec extends TestKit(ActorSystem("TlsActorSpec"))
       val tlsChannel = stub[ByteChannel]
       val xmlStreamActor = TestProbe("XmlStreamActor")
       val tlsListener = TestProbe("TlsListeningActor")
-      val tlsActor = system.actorOf(Props(new TlsActor {
+      val tlsActor = system.actorOf(Props(new TlsActor(xmlStreamActor.ref) {
         override def receive: Receive = handleTlsMessages(
           rawTlsChannel, tlsChannel, xmlStreamActor.ref, tlsListener.ref)
       }))
@@ -57,7 +57,7 @@ class TlsActorSpec extends TestKit(ActorSystem("TlsActorSpec"))
       val data = ByteString("UTF-8 message: ёжик")
       tlsActor ! TlsActor.SendToServer(data)
 
-      xmlStreamActor.expectMsg(200 millis, XmlStreamActor.ProcessDecryptedMessage(data))
+      xmlStreamActor.expectMsg(200 millis, XmlStreamManaging.ProcessDecryptedMessage(data))
     }
 
     "send PassToClient to XmlStreamActor when SendToClient received" in {
@@ -65,7 +65,7 @@ class TlsActorSpec extends TestKit(ActorSystem("TlsActorSpec"))
       val tlsChannel = stub[ByteChannel]
       val xmlStreamActor = TestProbe("XmlStreamActor")
       val tlsListener = TestProbe("TlsListeningActor")
-      val tlsActor = system.actorOf(Props(new TlsActor {
+      val tlsActor = system.actorOf(Props(new TlsActor(xmlStreamActor.ref) {
         override def receive: Receive = handleTlsMessages(
           rawTlsChannel, tlsChannel, xmlStreamActor.ref, tlsListener.ref)
       }))
@@ -73,7 +73,7 @@ class TlsActorSpec extends TestKit(ActorSystem("TlsActorSpec"))
       val data = ByteString("UTF-8 message: ёжик")
       tlsActor ! TlsActor.SendToClient(data)
 
-      xmlStreamActor.expectMsg(200 millis, XmlStreamActor.PassToClient(data))
+      xmlStreamActor.expectMsg(200 millis, XmlStreamManaging.PassToClient(data))
     }
 
     "write to TlsChannel when SendEncryptedToClient received" in {
@@ -81,7 +81,7 @@ class TlsActorSpec extends TestKit(ActorSystem("TlsActorSpec"))
       val tlsChannel = stub[ByteChannel]
       val xmlStreamActor = TestProbe("XmlStreamActor")
       val tlsListener = TestProbe("TlsListeningActor")
-      val tlsActor = system.actorOf(Props(new TlsActor {
+      val tlsActor = system.actorOf(Props(new TlsActor(xmlStreamActor.ref) {
         override def receive: Receive = handleTlsMessages(
           rawTlsChannel, tlsChannel, xmlStreamActor.ref, tlsListener.ref)
       }))
@@ -101,7 +101,7 @@ class TlsActorSpec extends TestKit(ActorSystem("TlsActorSpec"))
       val tlsChannel = stub[ByteChannel]
       val xmlStreamActor = TestProbe("XmlStreamActor")
       val tlsListener = TestProbe("TlsListeningActor")
-      val tlsActor = system.actorOf(Props(new TlsActor {
+      val tlsActor = system.actorOf(Props(new TlsActor(xmlStreamActor.ref) {
         override def receive: Receive = handleTlsMessages(
           rawTlsChannel, tlsChannel, xmlStreamActor.ref, tlsListener.ref)
       }))
@@ -121,7 +121,7 @@ class TlsActorSpec extends TestKit(ActorSystem("TlsActorSpec"))
     }
 
     "returns a valid SSLContext in createSslContext()" in {
-      val tlsActor = TestActorRef[TlsActor].underlyingActor
+      val tlsActor = TestActorRef(new TlsActor(TestActorRef[TestActors.BlackholeActor])).underlyingActor
       assert(tlsActor.createSslContext.isInstanceOf[SSLContext])
     }
   }

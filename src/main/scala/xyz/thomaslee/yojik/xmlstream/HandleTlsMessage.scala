@@ -21,18 +21,18 @@ object HandleTlsMessage {
    * a TLS session.
    *
    * @param log the [[akka.event.LoggingAdapter]] to use for logging
-   * @param self the [[xyz.thomaslee.yojik.xmlstream.XmlStreamActor]] instance
-   *   that is handling unauthenticated XML requests and responses
+   * @param self the [[xyz.thomaslee.yojik.xmlstream.XmlStreamManaging]] actor
+   *   instance that is handling unauthenticated XML requests and responses
    * @param xmlParser an ActorRef to the [[xyz.thomaslee.yojik.xml.XmlParsingActor]]
    *   responsible for parsing XML
    * @param prefix the stream prefix for the opening tag of the XML stream
    * @param tlsActor an ActorRef to the [[xyz.thomaslee.yojik.tls.TlsActor]]
    *   responsible for handling the TLS session
    */
-  def apply(log: LoggingAdapter, self: XmlStreamActor, xmlParser: ActorRef, prefix: Option[String], tlsActor: ActorRef): Receive = {
-    case XmlStreamActor.ProcessMessage(message) =>
+  def apply(log: LoggingAdapter, self: XmlStreamManaging, xmlParser: ActorRef, prefix: Option[String], tlsActor: ActorRef): Receive = {
+    case XmlStreamManaging.ProcessMessage(message) =>
       tlsActor ! TlsActor.ProcessMessage(message)
-    case XmlStreamActor.ProcessDecryptedMessage(message) => {
+    case XmlStreamManaging.ProcessDecryptedMessage(message) => {
       log.debug("Decrypted: " + message.utf8String)
       Try(self.xmlOutputStream.write(message.toArray[Byte])) match {
         case Success(_) => xmlParser ! XmlParsingActor.Parse
@@ -43,9 +43,9 @@ object HandleTlsMessage {
         }
       }
     }
-    case XmlStreamActor.PassToClient(message) =>
-      self.tcpConnectionActor ! ConnectionActor.ReplyToSender(message)
-    case XmlStreamActor.Stop => {
+    case XmlStreamManaging.PassToClient(message) =>
+      self.connectionActor ! ConnectionActor.ReplyToSender(message)
+    case XmlStreamManaging.Stop => {
       tlsActor ! TlsActor.Stop
       self.stop
     }

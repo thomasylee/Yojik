@@ -3,7 +3,7 @@ package xyz.thomaslee.yojik
 import akka.actor.{ Actor, ActorLogging, DeadLetter }
 import akka.util.ByteString
 
-import xyz.thomaslee.yojik.xmlstream.XmlStreamActor
+import xyz.thomaslee.yojik.xmlstream.XmlStreamManaging
 
 /**
  * Contains constants to be used by instances of
@@ -39,7 +39,7 @@ class DeadLetterActor extends Actor with ActorLogging {
       if (!fromName.startsWith(DeadLetterActor.XmlParsingActorPrefix) &&
           !toName.startsWith(DeadLetterActor.XmlParsingActorPrefix) &&
           msg != ConnectionActor.Disconnect &&
-          msg != XmlStreamActor.Stop) {
+          msg != XmlStreamManaging.Stop) {
         log.warning("Message failed to send from " + fromName + " to " +
           toName + ": " + msg.utf8String)
       }
