@@ -17,6 +17,7 @@ Currently, Yojik only supports the following features:
 * Securing the connection with STARTTLS as a required stream feature
 * Reopening the XML stream over the encrypted connection
 * SASL-PLAIN authentication
+* Resource binding
 
 # Building
 
