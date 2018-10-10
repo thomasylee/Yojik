@@ -52,7 +52,7 @@ object TlsActor {
    * @param xmlStreamManager an ActorRef to an actor with the
    *   [[xyz.thomaslee.yojik.xmlstream.XmlStreamManaging]] trait
    * @return a new [[akka.actor.Props]] instance to use to create a
-   *   [[xyz.thomaslee.yojik.tls.TlsActor]].
+   *   [[xyz.thomaslee.yojik.tls.TlsActor]]
    */
   def props(xmlStreamManager: ActorRef): Props =
     Props(classOf[TlsActor], xmlStreamManager)
