@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/thomasylee/Yojik.svg?branch=master)](https://travis-ci.org/thomasylee/Yojik)
+[![Build Status](https://travis-ci.org/thomasylee/yojik.svg?branch=master)](https://travis-ci.org/thomasylee/yojik)
 [![Codacy Coverage Badge](https://api.codacy.com/project/badge/Coverage/b74a3556b4394a24b5eb49309a3ede48)](https://www.codacy.com/app/thomasylee/Yojik?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=thomasylee/Yojik&amp;utm_campaign=Badge_Coverage)
 [![Codacy Grade Badge](https://api.codacy.com/project/badge/Grade/b74a3556b4394a24b5eb49309a3ede48)](https://www.codacy.com/app/thomasylee/Yojik?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=thomasylee/Yojik&amp;utm_campaign=Badge_Grade)
 
