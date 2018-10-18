@@ -15,7 +15,7 @@ import xyz.thomaslee.yojik.config.ConfigMap
 class TcpServer extends Actor with ActorLogging {
   implicit val system = context.system
 
-  IO(Tcp) ! Bind(self, new InetSocketAddress("localhost", ConfigMap.serverPort))
+  IO(Tcp) ! Bind(self, new InetSocketAddress("0.0.0.0", ConfigMap.serverPort))
 
   override def postStop: Unit = log.debug("TcpServer stopped")
 
