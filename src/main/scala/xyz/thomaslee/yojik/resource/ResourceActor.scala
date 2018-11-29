@@ -1,12 +1,17 @@
 package xyz.thomaslee.yojik.resource
 
 import akka.actor.{ ActorRef, ActorSystem, Props }
+import akka.util.ByteString
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 import java.util.concurrent.TimeUnit
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
+import scala.util.Success
 
+import xyz.thomaslee.yojik.config.ConfigMap
+import xyz.thomaslee.yojik.tls.TlsActor
 import xyz.thomaslee.yojik.xml.{ XmlParsingActor, XmlTag }
 import xyz.thomaslee.yojik.xmlstream.{ XmlStreamManaging, HandleTlsMessage }
 
@@ -17,6 +22,9 @@ import xyz.thomaslee.yojik.xmlstream.{ XmlStreamManaging, HandleTlsMessage }
 object ResourceActor {
   /** The timeout for how long to wait to find a ResourceActor. */
   val FindActorTimeout = new FiniteDuration(10, TimeUnit.SECONDS)
+
+  /** The Pattern that identifies the parts of a full JID. */
+  val ResourcePartsPattern = "^([^@]+)@([^/]+)/?(.*)$".r
 
   /**
    * Returns [[akka.actor.Props]] to use to create a
@@ -110,9 +118,75 @@ class ResourceActor(connActor: ActorRef,
    * Handles messages sent to this actor.
    */
   def receiveMessages: Receive = {
-    case XmlParsingActor.TagReceived(tag: XmlTag) => {
+    case XmlParsingActor.TagReceived(tag: XmlTag) => self ! tag
+    case tag: XmlTag if tag.name == "message" => {
       log.debug(tag.toString)
+      handleMessageStanza(tag)
     }
     case message => HandleTlsMessage(log, this, xmlParser, prefix, tlsActor)(message)
+  }
+
+  val bareJid = s"$user@${ConfigMap.domain}"
+  val fullJid = s"$bareJid/$resource"
+
+  def matchesThisResource(resourceAddress: String): Boolean =
+    resourceAddress == bareJid || resourceAddress == fullJid
+
+  def handleMessageStanza(tag: XmlTag): Unit = tag match {
+    // Message is to this resource.
+    case XmlTag(_, _, _, _)
+        if matchesThisResource(tag.attributes.getOrElse("to", "")) &&
+          tag.attributes.contains("from") => {
+      tlsActor ! TlsActor.SendEncryptedToClient(ByteString(tag.toString))
+    }
+    // Message is to this resource since "to" is blank.
+    case XmlTag(_, _, _, _) if !tag.attributes.contains("to") => {
+      val responseTag = new XmlTag("message", None, None, tag.attributes + (
+        "from" -> fullJid,
+        "to" -> bareJid))
+      tag.getContents.foreach { responseTag.addContent }
+      tlsActor ! TlsActor.SendEncryptedToClient(ByteString(responseTag.toString))
+    }
+    // Message is from this resource.
+    case XmlTag(_, _, _, _)
+        if matchesThisResource(tag.attributes.getOrElse("from", "")) &&
+          tag.attributes.contains("to") => {
+      val responseTag = new XmlTag("message", None, None, tag.attributes + (
+        "from" -> fullJid,
+        "to" -> tag.attributes("to")))
+      tag.getContents.foreach { responseTag.addContent }
+
+      val ResourceActor.ResourcePartsPattern(toUser, toDomain, toResource) = tag.attributes("to")
+
+      // Get the ActorRef recipient of the message and send the message to it.
+      // TODO: Handle routing to other domains (other XMPP servers) correctly.
+      val findRecipient =
+        if (toResource.isEmpty)
+          JidActor.findActor(context.system, toUser, toDomain)
+        else
+          ResourceActor.findActor(context.system, toUser, toDomain, toResource)
+
+      findRecipient.onComplete {
+        case Success(recipient) => recipient ! responseTag
+        case _ => {
+          val responseTag = new XmlTag("message", None, None, tag.attributes + ("from" -> fullJid))
+          val errorTag = new XmlTag("error", None, None, Map("type" -> "cancel"))
+          val serviceUnavail = new XmlTag("service-unavailable", None, Some("urn:ietf:params:xml:ns:xmpp-stanzas"), Map())
+          errorTag.addContent(serviceUnavail)
+          responseTag.addContent(errorTag)
+          tlsActor ! TlsActor.SendEncryptedToClient(ByteString(responseTag.toString))
+        }
+      }
+    }
+    case _ => {
+      val responseTag = new XmlTag("message", None, None, tag.attributes + (
+        "from" -> tag.attributes.getOrElse("to", ""),
+        "to" -> fullJid))
+      val errorTag = new XmlTag("error", None, None, Map("type" -> "modify"))
+      val badRequest = new XmlTag("bad-request", None, Some("urn:ietf:params:xml:ns:xmpp-stanzas"), Map())
+      errorTag.addContent(badRequest)
+      responseTag.addContent(errorTag)
+      tlsActor ! TlsActor.SendEncryptedToClient(ByteString(responseTag.toString))
+    }
   }
 }
